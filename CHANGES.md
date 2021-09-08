@@ -24,6 +24,11 @@ OpenSSL 3.1
 
 ### Changes between 3.0 and 3.1 [xx XXX xxxx]
 
+ * Add support for TCP Fast Open to macOS, Linux, FreeBSD where supported
+   and enabled. Use BIO_set_tfo() to enable on a socket.
+
+   *Todd Short*
+
  * Add new SSL APIs to aid in efficiently implementing TLS/SSL fingerprinting.  The
    SSL_CTRL_GET_IANA_GROUPS control code, exposed as the SSL_get0_iana_groups()
    function-like macro, retrieves the list of supported groups sent by the peer,
