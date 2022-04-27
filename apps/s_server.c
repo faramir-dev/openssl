@@ -74,7 +74,6 @@ static int accept_socket = -1;
 
 #define TEST_CERT       "server.pem"
 #define TEST_CERT2      "server2.pem"
-#define MAX_NUMBER_OF_INIT_CONN_FAILURES 16
 
 static int s_nbio = 0;
 static int s_nbio_test = 0;
@@ -2738,22 +2737,7 @@ static int sv_body(int s, int stype, int prot, unsigned char *context)
              */
             if ((!async || !SSL_waiting_for_async(con))
                     && !SSL_is_init_finished(con)) {
-                static int init_failures = 0;
-
                 i = init_ssl_connection(con);
-
-                /*
-                 * Count the total number of init failures and if there are
-                 * too many failures in a row then return an error.
-                 * This is a workaround because we cannot distinguish between
-                 * a nonrecovarable failure that is caused by misconfiguration
-                 * and between a failure caused by a client.
-                 */
-                init_failures =  i <= 0 ? init_failures + 1 : 0;
-                if (init_failures >= MAX_NUMBER_OF_INIT_CONN_FAILURES) {
-                    ret = -1;
-                    goto err;
-                }
 
                 if (i < 0) {
                     ret = 0;
