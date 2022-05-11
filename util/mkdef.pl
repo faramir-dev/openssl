@@ -41,7 +41,7 @@ GetOptions('name=s'     => \$name,
            'ordinals=s' => \$ordinals_file,
            'version=s'  => \$version,
            'OS=s'       => \$OS,
-           'type'       => \$type,
+           'type=s'     => \$type,
            'ctest'      => \$ctest,
            'verbose'    => \$verbose,
            # For VMS
