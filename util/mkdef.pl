@@ -50,7 +50,7 @@ GetOptions('name=s'     => \$name,
 
 die "Please supply arguments\n"
     unless $name && $ordinals_file && $OS;
-die "Argument type must be equal to 'lib' or 'dso'"
+die "--type argument must be equal to 'lib' or 'dso'"
     if $type ne 'lib' && $type ne 'dso';
 
 # When building a "variant" shared library, with a custom SONAME, also customize
