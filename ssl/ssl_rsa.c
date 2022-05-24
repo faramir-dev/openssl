@@ -549,6 +549,7 @@ static int serverinfo_find_extension(const unsigned char *serverinfo,
                                      size_t *extension_length)
 {
     PACKET pkt, data;
+//    PACKET tmp;
 
     *extension_data = NULL;
     *extension_length = 0;
@@ -566,10 +567,17 @@ static int serverinfo_find_extension(const unsigned char *serverinfo,
         if (PACKET_remaining(&pkt) == 0)
             return 0;           /* Extension not found */
 
+//        tmp = pkt;
         if (!PACKET_get_net_4(&pkt, &context)
                 || !PACKET_get_net_2(&pkt, &type)
                 || !PACKET_get_length_prefixed_2(&pkt, &data))
+//                {
+//            pkt = tmp;
+//            if (PACKET_get_net_2(&pkt, &type) && PACKET_get_length_prefixed_2(&pkt, &data))
+//                context = SSL_EXT_TLS1_2_AND_BELOW_ONLY | SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_SERVER_HELLO | SSL_EXT_IGNORE_ON_RESUMPTION;
+//            else
             return -1;
+//        }
 
         if (type == extension_type) {
             *extension_data = PACKET_data(&data);
@@ -750,8 +758,21 @@ int SSL_CTX_use_serverinfo_ex(SSL_CTX *ctx, unsigned int version,
 int SSL_CTX_use_serverinfo(SSL_CTX *ctx, const unsigned char *serverinfo,
                            size_t serverinfo_length)
 {
-    return SSL_CTX_use_serverinfo_ex(ctx, SSL_SERVERINFOV1, serverinfo,
-                                     serverinfo_length);
+    const size_t contextoff = 4;
+    const size_t sinfo_length = serverinfo_length + contextoff;
+    unsigned char sinfo[sinfo_length];
+
+    if (contextoff > 0) {
+        /* We know this only uses the last 2 bytes */
+        sinfo[0] = 0;
+        sinfo[1] = 0;
+        sinfo[2] = (SYNTHV1CONTEXT >> 8) & 0xff;
+        sinfo[3] = SYNTHV1CONTEXT & 0xff;
+    }
+    memcpy(sinfo + contextoff, serverinfo, serverinfo_length);
+
+    return SSL_CTX_use_serverinfo_ex(ctx, SSL_SERVERINFOV2, sinfo,
+                                     sinfo_length);
 }
 
 int SSL_CTX_use_serverinfo_file(SSL_CTX *ctx, const char *file)
