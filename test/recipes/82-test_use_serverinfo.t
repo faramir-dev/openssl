@@ -37,12 +37,9 @@ sub run_test {
                  data_file('test.crt'));
 
     my $spid = open2(my $sout, my $sin, $shlib_wrap, @s_cmd);
-print "Daniel:Reading server output";
     while (<$sout>) {
         chomp;
-        print "Daniel:Server:$_;\n";
         if ($_ =~ /^ACCEPT\s*:\s*(\d+)$/) {
-            print "Daniel:Accepted: $_;\n";
             $port = $1;
             last;
         }
@@ -61,7 +58,6 @@ print "Daniel:Reading server output";
     # Check the client output
     while (<$cout>) {
         chomp;
-        print "Daniel:Client:$_;\n";
         $is_begin_extension_18 = 1 if /^-----BEGIN SERVERINFO FOR EXTENSION 18-----$/;
         $is_extension_18 = 1 if /^ABIAAwQFBg==$/;
         $is_end_extension_18 = 1 if /^-----END SERVERINFO FOR EXTENSION 18-----$/;

@@ -677,7 +677,6 @@ int OPENSSL_atexit(void (*handler)(void))
             void *sym;
             void (*func)(void);
         } handlersym;
-        (void)handlersym;
 
         handlersym.func = handler;
 # if defined(DSO_WIN32) && !defined(_WIN32_WCE)
