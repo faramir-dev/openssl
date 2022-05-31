@@ -9,7 +9,7 @@
 use strict;
 use warnings;
 
-use IPC::Open2;
+use IPC::Open3;
 use OpenSSL::Test qw/:DEFAULT srctop_file bldtop_file data_file/;
 use OpenSSL::Test::Utils;
 
@@ -25,18 +25,18 @@ plan tests => 2;
 
 my $shlib_wrap = bldtop_file("util", "shlib_wrap.sh");
 my $apps_openssl = bldtop_file("apps", "openssl");
+my $test_server = bldtop_file("test", "use_serverinfo_test_server");
 my $cert = srctop_file("apps", "server.pem");
 
 sub run_test {
     my ($is_begin_extension_18, $is_extension_18, $is_end_extension_18) = (0, 0, 0);
     my $port = "0";
 
-    # Not using TLSv1.3 allows the test to work with "no-ec"
-    my @s_cmd = ("../../test/use_serverinfo_test_server",
+    my @s_cmd = ($test_server,
                  data_file('test.key'),
                  data_file('test.crt'));
 
-    my $spid = open2(my $sout, my $sin, $shlib_wrap, @s_cmd);
+    my $spid = open3(my $sin, my $sout, undef, $shlib_wrap, @s_cmd);
     while (<$sout>) {
         chomp;
         if ($_ =~ /^ACCEPT\s*:\s*(\d+)$/) {
@@ -50,7 +50,7 @@ sub run_test {
     # Start up the client
     my @c_cmd = ("s_client", "-connect", ":$port", "-no_tls1_3", "-serverinfo", 18);
 
-    my $cpid = open2(my $cout, my $cin, $shlib_wrap, $apps_openssl, @c_cmd);
+    my $cpid = open3(my $cin, my $cout, undef, $shlib_wrap, $apps_openssl, @c_cmd);
 
     waitpid($cpid, 0);
     waitpid($spid, 0);
@@ -64,7 +64,7 @@ sub run_test {
     }
 
     if (! ok($is_begin_extension_18 && $is_end_extension_18 && $is_extension_18)) {
-        print STDERR "Extension 18 not present :-(\n";
+        print STDERR "Extension 18 not found in client output :-(\n";
     }
 }
 
