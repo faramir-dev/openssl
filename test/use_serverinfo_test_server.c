@@ -26,13 +26,11 @@ int main(int argc, char *argv[]) {
     const char *key_fname = NULL;
     const char *cert_fname = NULL;
 
-    //struct sockaddr_in saddr;
-    BIO_ADDR *saddr = NULL;
+    struct sockaddr_in saddr;
     unsigned int len = sizeof(saddr);
     const char reply[] = "hello, client\n";
 
-    int sock = INVALID_SOCKET;
-    int client = INVALID_SOCKET;
+    int client = 0;
     SSL *ssl = NULL;
     int result = 1;
 
@@ -47,21 +45,14 @@ int main(int argc, char *argv[]) {
     addr.sin_port = htons(PORT);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (!BIO_ADDR_rawmake(saddr, AF_INET, &addr, sizeof(addr), PORT)) {
-        fprintf(stderr, "Unable to create socket address\n");
-        ERR_print_errors_fp(stderr);
-    }
-    
-    sock = BIO_socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == INVALID_SOCKET) {
-        fprintf(stderr, "Unable to create socket\n");
-        ERR_print_errors_fp(stderr);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("Unable to create socket");
         goto err;
     }
 
-    if (!BIO_bind(sock, (struct sockaddr*)&addr, sizeof(addr))) {
-        fprintf(stderr, "Unable to bind\n");
-        ERR_print_errors_fp(stderr);
+    if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("Unable to bind");
         goto err;
     }
 
@@ -135,8 +126,7 @@ int main(int argc, char *argv[]) {
     }
 
     result = 0;
-err:
-    BIO_ADDR_free(saddr);
+err:    
     SSL_shutdown(ssl);
     SSL_free(ssl);
 
