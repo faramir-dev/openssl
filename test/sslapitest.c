@@ -35,6 +35,7 @@
 #include <openssl/dh.h>
 
 #include "helpers/ssltestlib.h"
+#include "../include/crypto/x509.h"
 #include "testutil.h"
 #include "testutil/output.h"
 #include "internal/nelem.h"
@@ -5878,6 +5879,99 @@ static int test_serverinfo(int tst)
     return testresult;
 }
 
+ static int serverinfo_custom_v1_verify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx)
+ {
+    //TEST_true(cctx->cert->key->serverinfo != NULL);
+    return TEST_true(preverify_ok)
+           && TEST_true(x509_ctx->cert->key->serverinfo != NULL);
+ }
+
+static int test_serverinfo_custom_v1(void)
+{
+    const unsigned char serverinfo18[] = {
+        //0x00, 0x00, 0x11, 0x80,
+        0x00, 0x12,
+        0x00, 0x03,
+        0x04, 0x05, 0x06
+    };
+    const unsigned int version = SSL_SERVERINFOV1;
+
+    //SSL_CTX *ctx = NULL;
+    SSL_CTX *sctx = NULL, *cctx = NULL;
+    //SSL_SESSION *sess = NULL;
+    SSL *clientssl = NULL, *serverssl = NULL;
+    int testresult = 0;
+    int ret;
+
+#if 0
+/*
+    ctx = SSL_CTX_new_ex(libctx, NULL, TLSv1_2_method());
+    if (!TEST_ptr(ctx))
+        goto end;
+    sctx = ctx;
+    cctx = ctx;
+
+    SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
+*/
+    /*
+    if (SSL_CTX_use_certificate_file(ctx, cert_fname, SSL_FILETYPE_PEM) <= 0) {
+        fprintf(stderr, "Unable to use certificate '%s':\n", cert_fname);
+        ERR_print_errors_fp(stderr);
+        goto err;
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(ctx, key_fname, SSL_FILETYPE_PEM) <= 0 ) {
+        fprintf(stderr, "Unable to use key '%s':\n", key_fname);
+        ERR_print_errors_fp(stderr);
+        goto err;
+    }*/
+
+    ret = SSL_CTX_use_serverinfo(ctx,
+                                 serverinfo18,
+                                 sizeof(serverinfo18));
+    if (!TEST_true(ret))
+        goto end;
+#endif
+
+    if (!TEST_true(create_ssl_ctx_pair(libctx, TLSv1_2_server_method(),
+                                       TLS_client_method(), TLS1_VERSION, 0,
+                                       &sctx, &cctx, cert, privkey)))
+/*
+    if (!TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
+                                      NULL, NULL))
+            || !TEST_true(SSL_set_session(clientssl, sess))
+            || !TEST_true(create_ssl_connection(serverssl, clientssl,
+                                                SSL_ERROR_NONE)))*/
+        goto end;
+
+    ret = SSL_CTX_use_serverinfo(sctx,
+                                 serverinfo18,
+                                 sizeof(serverinfo18));
+    if (!TEST_true(ret))
+        goto end;
+
+    if(!TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
+                                     NULL, NULL))
+       || !TEST_true(create_ssl_connection(serverssl, clientssl,
+                                           SSL_ERROR_NONE))
+       || !TEST_true(SSL_do_handshake(clientssl)))
+        goto end;
+
+    SSL_set_verify(clientssl, SSL_VERIFY_PEER, serverinfo_custom_v1_verify_cb);
+
+    testresult = 1;
+
+ end:
+    SSL_free(serverssl);
+    SSL_free(clientssl);
+    SSL_CTX_free(sctx);
+    SSL_CTX_free(cctx);
+
+    return testresult;
+}
+
 /*
  * Test that SSL_export_keying_material() produces expected results. There are
  * no test vectors so all we do is test that both sides of the communication
@@ -9910,6 +10004,7 @@ int setup_tests(void)
     if (privkey8192 == NULL)
         goto err;
 
+#if 0
 #if !defined(OPENSSL_NO_KTLS) && !defined(OPENSSL_NO_SOCK)
 # if !defined(OPENSSL_NO_TLS1_2) || !defined(OSSL_NO_USABLE_TLS1_3)
     ADD_ALL_TESTS(test_ktls, NUM_KTLS_TEST_CIPHERS * 4);
@@ -10002,6 +10097,7 @@ int setup_tests(void)
     ADD_ALL_TESTS(test_custom_exts, 3);
 #endif
     ADD_ALL_TESTS(test_serverinfo, 8);
+    ADD_TEST(test_serverinfo_custom_v1);
     ADD_ALL_TESTS(test_export_key_mat, 6);
 #ifndef OSSL_NO_USABLE_TLS1_3
     ADD_ALL_TESTS(test_export_key_mat_early, 3);
@@ -10053,6 +10149,8 @@ int setup_tests(void)
     ADD_TEST(test_set_verify_cert_store_ssl);
     ADD_ALL_TESTS(test_session_timeout, 1);
     ADD_TEST(test_load_dhfile);
+#endif
+    ADD_TEST(test_serverinfo_custom_v1);
     return 1;
 
  err:
