@@ -5881,7 +5881,6 @@ static int test_serverinfo(int tst)
 
  static int serverinfo_custom_v1_verify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx)
  {
-    //TEST_true(cctx->cert->key->serverinfo != NULL);
     return TEST_true(preverify_ok)
            && TEST_true(x509_ctx->cert->key->serverinfo != NULL);
  }
@@ -5896,54 +5895,14 @@ static int test_serverinfo_custom_v1(void)
     };
     const unsigned int version = SSL_SERVERINFOV1;
 
-    //SSL_CTX *ctx = NULL;
     SSL_CTX *sctx = NULL, *cctx = NULL;
-    //SSL_SESSION *sess = NULL;
     SSL *clientssl = NULL, *serverssl = NULL;
     int testresult = 0;
     int ret;
 
-#if 0
-/*
-    ctx = SSL_CTX_new_ex(libctx, NULL, TLSv1_2_method());
-    if (!TEST_ptr(ctx))
-        goto end;
-    sctx = ctx;
-    cctx = ctx;
-
-    SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-    SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION);
-*/
-    /*
-    if (SSL_CTX_use_certificate_file(ctx, cert_fname, SSL_FILETYPE_PEM) <= 0) {
-        fprintf(stderr, "Unable to use certificate '%s':\n", cert_fname);
-        ERR_print_errors_fp(stderr);
-        goto err;
-    }
-
-    if (SSL_CTX_use_PrivateKey_file(ctx, key_fname, SSL_FILETYPE_PEM) <= 0 ) {
-        fprintf(stderr, "Unable to use key '%s':\n", key_fname);
-        ERR_print_errors_fp(stderr);
-        goto err;
-    }*/
-
-    ret = SSL_CTX_use_serverinfo(ctx,
-                                 serverinfo18,
-                                 sizeof(serverinfo18));
-    if (!TEST_true(ret))
-        goto end;
-#endif
-
     if (!TEST_true(create_ssl_ctx_pair(libctx, TLSv1_2_server_method(),
                                        TLS_client_method(), TLS1_VERSION, 0,
                                        &sctx, &cctx, cert, privkey)))
-/*
-    if (!TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
-                                      NULL, NULL))
-            || !TEST_true(SSL_set_session(clientssl, sess))
-            || !TEST_true(create_ssl_connection(serverssl, clientssl,
-                                                SSL_ERROR_NONE)))*/
         goto end;
 
     ret = SSL_CTX_use_serverinfo(sctx,
