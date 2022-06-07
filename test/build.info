@@ -250,10 +250,6 @@ IF[{- !$disabled{tests} -}]
   INCLUDE[danetest]=../include ../apps/include
   DEPEND[danetest]=../libcrypto ../libssl libtestutil.a
 
-  SOURCE[use_serverinfo_test_server]=use_serverinfo_test_server.c
-  INCLUDE[use_serverinfo_test_server]=../include ../apps/include
-  DEPEND[use_serverinfo_test_server]=../libcrypto ../libssl
-
   SOURCE[constant_time_test]=constant_time_test.c
   INCLUDE[constant_time_test]=../include ../apps/include
   DEPEND[constant_time_test]=../libcrypto libtestutil.a
@@ -616,7 +612,7 @@ IF[{- !$disabled{tests} -}]
                      rsa_sp800_56b_test bn_internal_test ecdsatest rsa_test \
                      rc2test rc4test rc5test hmactest ffc_internal_test \
                      asn1_dsa_internal_test dsatest dsa_no_digest_size_test \
-                     dhtest ssl_old_test use_serverinfo_test_server
+                     dhtest ssl_old_test
 
     IF[{- !$disabled{poly1305} -}]
       PROGRAMS{noinst}=poly1305_internal_test
