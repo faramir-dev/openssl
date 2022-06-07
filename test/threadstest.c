@@ -30,7 +30,7 @@
 #include "threadstest.h"
 
 /* Limit the maximum number of threads */
-#define MAXIMUM_THREADS     10
+#define MAXIMUM_THREADS     32
 
 /* Limit the maximum number of providers loaded into a library context */
 #define MAXIMUM_PROVIDERS   4
@@ -667,6 +667,170 @@ static int test_lib_ctx_load_config(void)
                            1, default_provider);
 }
 
+# include <openssl/hmac.h>
+# include <openssl/sha.h>
+# ifndef OPENSSL_NO_MD5
+#  include <openssl/md5.h>
+# endif
+
+# ifndef OPENSSL_NO_MD5
+static struct test_st {
+    const char key[16];
+    int key_len;
+    const unsigned char data[64];
+    int data_len;
+    const char *digest;
+} const test[8] = {
+    {
+        "", 0, "More text test vectors to stuff up EBCDIC machines :-)", 54,
+        "e9139d1e6ee064ef8cf514fc7dc83e86",
+    },
+    {
+        "\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b",
+        16, "Hi There", 8,
+        "9294727a3638bb1c13f48ef8158bfc9d",
+    },
+    {
+        "Jefe", 4, "what do ya want for nothing?", 28,
+        "750c783e6ab0b503eaa86e310a5db738",
+    },
+    {
+        "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa",
+        16, {
+            0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
+            0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
+            0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
+            0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd,
+            0xdd, 0xdd, 0xdd, 0xdd, 0xdd, 0xdd
+        }, 50, "56be34521d144c88dbb8c733f0e8b3f6",
+    },
+    {
+        "", 0, "My test data", 12,
+        "61afdecb95429ef494d61fdee15990cabf0826fc"
+    },
+    {
+        "", 0, "My test data", 12,
+        "2274b195d90ce8e03406f4b526a47e0787a88a65479938f1a5baa3ce0f079776"
+    },
+    {
+        "123456", 6, "My test data", 12,
+        "bab53058ae861a7f191abe2d0145cbb123776a6369ee3f9d79ce455667e411dd"
+    },
+    {
+        "12345", 5, "My test data again", 18,
+        "a12396ceddd2a85f4c656bc1e0aa50c78cffde3e"
+    }
+};
+# endif
+
+static int test_18222_hmac_worker(void)
+{
+    int ret = 0;
+    HMAC_CTX *ctx = NULL;
+    ctx = HMAC_CTX_new();
+    if (!TEST_ptr(ctx)
+        || !TEST_ptr_null(HMAC_CTX_get_md(ctx))
+        || !TEST_false(HMAC_Init_ex(ctx, NULL, 0, NULL, NULL))
+        || !TEST_false(HMAC_Update(ctx, test[4].data, test[4].data_len))
+        || !TEST_false(HMAC_Init_ex(ctx, NULL, 0, EVP_sha1(), NULL))
+        || !TEST_false(HMAC_Update(ctx, test[4].data, test[4].data_len)))
+        goto err;
+
+    ret = 1;
+err:
+    HMAC_CTX_free(ctx);
+
+    return ret;
+}
+
+#include <openssl/evp.h>
+static int test_18222_evp_worker(void)
+{
+    int ret = 0;
+    EVP_CIPHER_CTX *ctx = NULL;
+    const EVP_CIPHER *cipher = NULL;
+    const EVP_MD *dgst = NULL;
+    unsigned char key[EVP_MAX_KEY_LENGTH], iv[EVP_MAX_IV_LENGTH];
+    const char *password = "password";
+    const unsigned char *salt = (const unsigned char*)"01234567";
+
+    ctx = EVP_CIPHER_CTX_new();
+    if (!TEST_ptr(ctx))
+        goto err;
+
+    cipher = EVP_get_cipherbyname("aes-256-cbc");
+    if (!TEST_ptr(cipher))
+        goto err;
+    
+    dgst = EVP_get_digestbyname("md5");
+    if (!TEST_ptr(dgst))
+        goto err;
+
+    //if(!TEST_int_gt(EVP_BytesToKey(EVP_aes_256_ecb(), EVP_sha1(), salt,
+    if(!TEST_int_gt(EVP_BytesToKey(cipher, dgst, salt,
+                       (const unsigned char*)password,
+                       (int)strlen(password), 1, key, iv),
+                    0))
+        goto err;
+
+    if(TEST_int_eq(EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, key, iv), 1))
+        goto err;
+
+    ret = 1;
+err:
+    // FIXME: Daniel: Free everything
+    ERR_print_errors_fp(stderr);
+    (void)0;
+    return ret;
+}
+
+static int counter_18222 = 0;
+static int passed_18222 = 0;
+static void test_18222_worker(void)
+{
+    OSSL_PROVIDER *prov = NULL;
+    int ret = 0;
+    int index = 0;
+
+    if (!TEST_ptr(prov = OSSL_PROVIDER_load(multi_libctx, multi_load_provider)))
+        goto err;
+
+    TEST_true(CRYPTO_atomic_add(&counter_18222, 1, &index, NULL));
+    switch (counter_18222 % 4) {
+        case 0:
+        case 1:
+            //ret = test_18222_hmac_worker();
+            //ret = test_18222_evp_worker();
+            ret = test_18222_hmac_worker();
+            break;
+        case 2:
+        case 3:
+            //ret = test_18222_evp_worker();
+            ret = test_18222_hmac_worker();
+            break;
+    }
+
+err:
+    if (TEST_true(ret))
+    {
+        int passed;
+        TEST_true(CRYPTO_atomic_add(&passed_18222, 1, &passed, NULL));
+    }
+
+    TEST_true(OSSL_PROVIDER_unload(prov));
+}
+
+static int test_18222(void)
+{
+    const int ret = thread_run_test(&test_18222_evp_worker,
+                                    MAXIMUM_THREADS, &test_18222_worker,
+                                    1, default_provider);
+    return TEST_true(ret) &&
+           TEST_int_eq(counter_18222, MAXIMUM_THREADS + 1) &&
+           TEST_int_eq(passed_18222, MAXIMUM_THREADS + 1);
+          return 1;
+}
+
 typedef enum OPTION_choice {
     OPT_ERR = -1,
     OPT_EOF = 0,
@@ -736,6 +900,7 @@ int setup_tests(void)
     ADD_TEST(test_multi_load_unload_provider);
     ADD_TEST(test_obj_add);
     ADD_TEST(test_lib_ctx_load_config);
+    ADD_TEST(test_18222);
     return 1;
 }
 
