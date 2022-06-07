@@ -5879,10 +5879,15 @@ static int test_serverinfo(int tst)
     return testresult;
 }
 
- static int serverinfo_custom_v1_verify_cb(int preverify_ok, X509_STORE_CTX *x509_ctx)
+ static int serverinfo_custom_v1_parse_cb(SSL *s, unsigned int ext_type,
+                                          unsigned int context,
+                                          const unsigned char *in,
+                                          size_t inlen, X509 *x,
+                                          size_t chainidx, int *al,
+                                          void *parse_arg)
  {
-    return TEST_true(preverify_ok)
-           && TEST_true(x509_ctx->cert->key->serverinfo != NULL);
+    //return TEST_true(x->cert->key->serverinfo != NULL);
+    return 1;
  }
 
 static int test_serverinfo_custom_v1(void)
@@ -5902,23 +5907,24 @@ static int test_serverinfo_custom_v1(void)
 
     if (!TEST_true(create_ssl_ctx_pair(libctx, TLSv1_2_server_method(),
                                        TLS_client_method(), TLS1_VERSION, 0,
-                                       &sctx, &cctx, cert, privkey)))
+                                       &sctx, &cctx, cert, privkey))
+        || !TEST_true(SSL_CTX_use_serverinfo(sctx,
+                                             serverinfo18,
+                                             sizeof(serverinfo18)))
+        || !TEST_true(SSL_CTX_add_custom_ext(cctx, TEST_EXT_TYPE1 /*0*/,
+                                             SSL_EXT_TLS1_2_AND_BELOW_ONLY
+                                             | SSL_EXT_CLIENT_HELLO
+                                             | SSL_EXT_TLS1_2_SERVER_HELLO
+                                             | SSL_EXT_IGNORE_ON_RESUMPTION,
+                                             NULL, NULL, NULL,
+                                             serverinfo_custom_v1_parse_cb,
+                                             NULL))
+        || !TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
+                                         NULL, NULL))
+        || !TEST_true(create_ssl_connection(serverssl, clientssl,
+                                            SSL_ERROR_NONE))
+        || !TEST_int_eq(SSL_do_handshake(clientssl), 1))
         goto end;
-
-    ret = SSL_CTX_use_serverinfo(sctx,
-                                 serverinfo18,
-                                 sizeof(serverinfo18));
-    if (!TEST_true(ret))
-        goto end;
-
-    if(!TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
-                                     NULL, NULL))
-       || !TEST_true(create_ssl_connection(serverssl, clientssl,
-                                           SSL_ERROR_NONE))
-       || !TEST_true(SSL_do_handshake(clientssl)))
-        goto end;
-
-    SSL_set_verify(clientssl, SSL_VERIFY_PEER, serverinfo_custom_v1_verify_cb);
 
     testresult = 1;
 
@@ -9963,7 +9969,6 @@ int setup_tests(void)
     if (privkey8192 == NULL)
         goto err;
 
-#if 0
 #if !defined(OPENSSL_NO_KTLS) && !defined(OPENSSL_NO_SOCK)
 # if !defined(OPENSSL_NO_TLS1_2) || !defined(OSSL_NO_USABLE_TLS1_3)
     ADD_ALL_TESTS(test_ktls, NUM_KTLS_TEST_CIPHERS * 4);
@@ -10108,7 +10113,6 @@ int setup_tests(void)
     ADD_TEST(test_set_verify_cert_store_ssl);
     ADD_ALL_TESTS(test_session_timeout, 1);
     ADD_TEST(test_load_dhfile);
-#endif
     ADD_TEST(test_serverinfo_custom_v1);
     return 1;
 
