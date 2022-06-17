@@ -5879,51 +5879,56 @@ static int test_serverinfo(int tst)
     return testresult;
 }
 
- static int serverinfo_custom_v1_parse_cb(SSL *s, unsigned int ext_type,
+static const unsigned char serverinfo18[] = {
+    //0x00, 0x00, 0x11, 0x80,
+    0x00, 0x12,
+    0x00, 0x03,
+    0x04, 0x05, 0x06
+};
+
+static int serverinfo_custom_v1_parse_cb(SSL *s, unsigned int ext_type,
                                           unsigned int context,
                                           const unsigned char *in,
                                           size_t inlen, X509 *x,
                                           size_t chainidx, int *al,
                                           void *parse_arg)
- {
-    //return TEST_true(x->cert->key->serverinfo != NULL);
+{
+    const size_t len = sizeof(serverinfo18);
+    const char *si = &serverinfo18[len - 3];
+    int *p_cb_result = (int*)parse_arg;
+    *p_cb_result = TEST_mem_eq(in, inlen, si, 3);
     return 1;
- }
+}
 
 static int test_serverinfo_custom_v1(void)
 {
-    const unsigned char serverinfo18[] = {
-        //0x00, 0x00, 0x11, 0x80,
-        0x00, 0x12,
-        0x00, 0x03,
-        0x04, 0x05, 0x06
-    };
-    const unsigned int version = SSL_SERVERINFOV1;
-
     SSL_CTX *sctx = NULL, *cctx = NULL;
     SSL *clientssl = NULL, *serverssl = NULL;
     int testresult = 0;
-    int ret;
+    int cb_result = 0;
 
     if (!TEST_true(create_ssl_ctx_pair(libctx, TLSv1_2_server_method(),
-                                       TLS_client_method(), TLS1_VERSION, 0,
+                                       TLS_client_method(), TLS1_2_VERSION, 0,
                                        &sctx, &cctx, cert, privkey))
         || !TEST_true(SSL_CTX_use_serverinfo(sctx,
                                              serverinfo18,
                                              sizeof(serverinfo18)))
-        || !TEST_true(SSL_CTX_add_custom_ext(cctx, TEST_EXT_TYPE1 /*0*/,
+        || !TEST_true(SSL_CTX_add_custom_ext(cctx, 18 /*TLSEXT_TYPE_signed_certificate_timestamp*/ /*TLSEXT_TYPE_early_data*/ /*TEST_EXT_TYPE1*/ /*0*/,
                                              SSL_EXT_TLS1_2_AND_BELOW_ONLY
                                              | SSL_EXT_CLIENT_HELLO
                                              | SSL_EXT_TLS1_2_SERVER_HELLO
                                              | SSL_EXT_IGNORE_ON_RESUMPTION,
                                              NULL, NULL, NULL,
                                              serverinfo_custom_v1_parse_cb,
-                                             NULL))
+                                             &cb_result))
         || !TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
                                          NULL, NULL))
         || !TEST_true(create_ssl_connection(serverssl, clientssl,
                                             SSL_ERROR_NONE))
         || !TEST_int_eq(SSL_do_handshake(clientssl), 1))
+        goto end;
+
+    if (!TEST_true(cb_result))
         goto end;
 
     testresult = 1;
