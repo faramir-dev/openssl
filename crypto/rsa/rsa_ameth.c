@@ -568,6 +568,7 @@ int ossl_rsa_pss_to_ctx(EVP_MD_CTX *ctx, EVP_PKEY_CTX *pkctx,
     return rv;
 }
 
+// Daniel: Here are the checks for RSA_PSS_PARAMS, but not for RSA_PSS_PARAMS_30.
 static int rsa_pss_verify_param(const EVP_MD **pmd, const EVP_MD **pmgf1md,
                                 int *psaltlen, int *ptrailerField)
 {
