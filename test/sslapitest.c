@@ -5878,6 +5878,7 @@ static int test_serverinfo(int tst)
     return testresult;
 }
 
+#if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
 static const unsigned char serverinfo_custom_v1[] = {
     0x00, (char)TLSEXT_TYPE_signed_certificate_timestamp,
     0x00, 0x03,
@@ -5939,6 +5940,7 @@ static int test_serverinfo_custom_v1(void)
 
     return testresult;
 }
+#endif
 
 /*
  * Test that SSL_export_keying_material() produces expected results. There are
@@ -10064,7 +10066,6 @@ int setup_tests(void)
     ADD_ALL_TESTS(test_custom_exts, 3);
 #endif
     ADD_ALL_TESTS(test_serverinfo, 8);
-    ADD_TEST(test_serverinfo_custom_v1);
     ADD_ALL_TESTS(test_export_key_mat, 6);
 #ifndef OSSL_NO_USABLE_TLS1_3
     ADD_ALL_TESTS(test_export_key_mat_early, 3);
@@ -10116,7 +10117,9 @@ int setup_tests(void)
     ADD_TEST(test_set_verify_cert_store_ssl);
     ADD_ALL_TESTS(test_session_timeout, 1);
     ADD_TEST(test_load_dhfile);
+#if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
     ADD_TEST(test_serverinfo_custom_v1);
+#endif
     return 1;
 
  err:
