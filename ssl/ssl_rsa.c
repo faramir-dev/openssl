@@ -781,11 +781,22 @@ int SSL_CTX_use_serverinfo(SSL_CTX *ctx, const unsigned char *serverinfo,
 {
     const size_t sinfo_length = extension_append_length(SSL_SERVERINFOV1,
                                                         serverinfo_length);
-    unsigned char sinfo[sinfo_length];
+    unsigned char *sinfo;
+    int ret;
+
+    sinfo = OPENSSL_malloc(sinfo_length);
+    if (sinfo == NULL) {
+        ERR_raise(ERR_LIB_SSL, ERR_R_MALLOC_FAILURE);
+        return 0;
+    }
+
     extension_append(SSL_SERVERINFOV1, serverinfo, serverinfo_length, sinfo);
 
-    return SSL_CTX_use_serverinfo_ex(ctx, SSL_SERVERINFOV2, sinfo,
-                                     sinfo_length);
+    ret = SSL_CTX_use_serverinfo_ex(ctx, SSL_SERVERINFOV2, sinfo,
+                                    sinfo_length);
+
+    OPENSSL_free(sinfo);
+    return ret;
 }
 
 int SSL_CTX_use_serverinfo_file(SSL_CTX *ctx, const char *file)
