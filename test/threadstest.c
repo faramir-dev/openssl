@@ -758,22 +758,21 @@ static int test_18222_evp_worker(void)
     if (!TEST_ptr(ctx))
         goto err;
 
-    cipher = EVP_get_cipherbyname("aes-256-cbc");
+    cipher = EVP_CIPHER_fetch(multi_libctx, "aes-256-cbc", NULL); //EVP_get_cipherbyname("aes-256-cbc");
     if (!TEST_ptr(cipher))
         goto err;
-    
-    dgst = EVP_get_digestbyname("md5");
+
+    dgst = EVP_MD_fetch(multi_libctx, "md5", NULL); //EVP_get_digestbyname("md5");
     if (!TEST_ptr(dgst))
         goto err;
 
-    //if(!TEST_int_gt(EVP_BytesToKey(EVP_aes_256_ecb(), EVP_sha1(), salt,
     if(!TEST_int_gt(EVP_BytesToKey(cipher, dgst, salt,
                        (const unsigned char*)password,
                        (int)strlen(password), 1, key, iv),
                     0))
         goto err;
 
-    if(TEST_int_eq(EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, key, iv), 1))
+    if(!TEST_true(EVP_DecryptInit_ex(ctx, cipher, NULL, key, iv)))
         goto err;
 
     ret = 1;
@@ -784,28 +783,29 @@ err:
     return ret;
 }
 
+static void test_18222_init(void)
+{
+    //test_18222_evp_worker();
+}
+
 static int counter_18222 = 0;
 static int passed_18222 = 0;
 static void test_18222_worker(void)
 {
-    OSSL_PROVIDER *prov = NULL;
     int ret = 0;
     int index = 0;
+    //OSSL_LIB_CTX *oldctx = OSSL_LIB_CTX_set0_default(multi_libctx);
 
-    if (!TEST_ptr(prov = OSSL_PROVIDER_load(multi_libctx, multi_load_provider)))
+    if (!TEST_true(CRYPTO_atomic_add(&counter_18222, 1, &index, NULL)))
         goto err;
 
-    TEST_true(CRYPTO_atomic_add(&counter_18222, 1, &index, NULL));
     switch (counter_18222 % 4) {
         case 0:
         case 1:
-            //ret = test_18222_hmac_worker();
-            //ret = test_18222_evp_worker();
-            ret = test_18222_hmac_worker();
+            ret = test_18222_evp_worker();
             break;
         case 2:
         case 3:
-            //ret = test_18222_evp_worker();
             ret = test_18222_hmac_worker();
             break;
     }
@@ -817,18 +817,17 @@ err:
         TEST_true(CRYPTO_atomic_add(&passed_18222, 1, &passed, NULL));
     }
 
-    TEST_true(OSSL_PROVIDER_unload(prov));
+    //OSSL_LIB_CTX_set0_default(oldctx);
 }
 
 static int test_18222(void)
 {
-    const int ret = thread_run_test(&test_18222_evp_worker,
+    const int ret = thread_run_test(&test_18222_init,
                                     MAXIMUM_THREADS, &test_18222_worker,
                                     1, default_provider);
     return TEST_true(ret) &&
-           TEST_int_eq(counter_18222, MAXIMUM_THREADS + 1) &&
-           TEST_int_eq(passed_18222, MAXIMUM_THREADS + 1);
-          return 1;
+           TEST_int_eq(counter_18222, MAXIMUM_THREADS) &&
+           TEST_int_eq(passed_18222, MAXIMUM_THREADS);
 }
 
 typedef enum OPTION_choice {
