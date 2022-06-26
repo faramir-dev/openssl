@@ -5878,29 +5878,43 @@ static int test_serverinfo(int tst)
     return testresult;
 }
 
+
 #if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
-static const unsigned char serverinfo_custom_v1[] = {
+
+#define  SYNTHV1CONTEXT     (SSL_EXT_TLS1_2_AND_BELOW_ONLY \
+                             | SSL_EXT_CLIENT_HELLO \
+                             | SSL_EXT_TLS1_2_SERVER_HELLO \
+                             | SSL_EXT_IGNORE_ON_RESUMPTION)
+
+static const unsigned char serverinfo_custom_v2[] = {
+    0x00, 0x00, (SYNTHV1CONTEXT >> 8) & 0xff,  SYNTHV1CONTEXT & 0xff,
     0x00, (char)TLSEXT_TYPE_signed_certificate_timestamp,
     0x00, 0x03,
     0x04, 0x05, 0x06
 };
+static const size_t serverinfo_custom_v2_len = sizeof(serverinfo_custom_v2);
+static const unsigned char *serverinfo_custom_v1 = &serverinfo_custom_v2[4];
+static const size_t serverinfo_custom_v1_len = serverinfo_custom_v2_len - 4;
 
-static int serverinfo_custom_v1_parse_cb(SSL *s, unsigned int ext_type,
+static int serverinfo_custom_parse_cb(SSL *s, unsigned int ext_type,
                                           unsigned int context,
                                           const unsigned char *in,
                                           size_t inlen, X509 *x,
                                           size_t chainidx, int *al,
                                           void *parse_arg)
 {
-    const size_t len = sizeof(serverinfo_custom_v1);
+    const size_t len = serverinfo_custom_v1_len;
     const unsigned char *si = &serverinfo_custom_v1[len - 3];
     int *p_cb_result = (int*)parse_arg;
     *p_cb_result = TEST_mem_eq(in, inlen, si, 3);
     return 1;
 }
 
-static int test_serverinfo_custom_v1(void)
+static int test_serverinfo_custom(const int idx)
 {
+    const int call_use_serverinfo_ex = idx > 0;
+    const int use_v2_serverinfo = idx > 1;
+
     SSL_CTX *sctx = NULL, *cctx = NULL;
     SSL *clientssl = NULL, *serverssl = NULL;
     int testresult = 0;
@@ -5908,17 +5922,29 @@ static int test_serverinfo_custom_v1(void)
 
     if (!TEST_true(create_ssl_ctx_pair(libctx, TLSv1_2_server_method(),
                                        TLS_client_method(), TLS1_2_VERSION, 0,
-                                       &sctx, &cctx, cert, privkey))
-        || !TEST_true(SSL_CTX_use_serverinfo(sctx,
-                                             serverinfo_custom_v1,
-                                             sizeof(serverinfo_custom_v1)))
-        || !TEST_true(SSL_CTX_add_custom_ext(cctx, TLSEXT_TYPE_signed_certificate_timestamp /* == 18 */,
+                                       &sctx, &cctx, cert, privkey)))
+        goto end;
+
+    const int version = use_v2_serverinfo ? SSL_SERVERINFOV2 : SSL_SERVERINFOV1;
+    const unsigned char *si = use_v2_serverinfo ? serverinfo_custom_v2
+                                                : serverinfo_custom_v1;
+    const size_t si_len = use_v2_serverinfo ? serverinfo_custom_v2_len
+                                            : serverinfo_custom_v1_len;
+    if (call_use_serverinfo_ex) {
+        if (!TEST_true(SSL_CTX_use_serverinfo_ex(sctx, version, si, si_len)))
+            goto end;
+    } else {
+        if (!TEST_true(SSL_CTX_use_serverinfo(sctx, si, si_len)))
+            goto end;
+    }
+
+    if (!TEST_true(SSL_CTX_add_custom_ext(cctx, TLSEXT_TYPE_signed_certificate_timestamp,
                                              SSL_EXT_TLS1_2_AND_BELOW_ONLY
                                              | SSL_EXT_CLIENT_HELLO
                                              | SSL_EXT_TLS1_2_SERVER_HELLO
                                              | SSL_EXT_IGNORE_ON_RESUMPTION,
                                              NULL, NULL, NULL,
-                                             serverinfo_custom_v1_parse_cb,
+                                             serverinfo_custom_parse_cb,
                                              &cb_result))
         || !TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
                                          NULL, NULL))
@@ -10118,7 +10144,7 @@ int setup_tests(void)
     ADD_ALL_TESTS(test_session_timeout, 1);
     ADD_TEST(test_load_dhfile);
 #if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
-    ADD_TEST(test_serverinfo_custom_v1);
+    ADD_ALL_TESTS(test_serverinfo_custom, 3);
 #endif
     return 1;
 
