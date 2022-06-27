@@ -134,20 +134,6 @@ struct sslapitest_log_counts {
 };
 
 
-static unsigned char serverinfov1[] = {
-    0xff, 0xff, /* Dummy extension type */
-    0x00, 0x01, /* Extension length is 1 byte */
-    0xff        /* Dummy extension data */
-};
-
-static unsigned char serverinfov2[] = {
-    0x00, 0x00, 0x00,
-    (unsigned char)(SSL_EXT_CLIENT_HELLO & 0xff), /* Dummy context - 4 bytes */
-    0xff, 0xff, /* Dummy extension type */
-    0x00, 0x01, /* Extension length is 1 byte */
-    0xff        /* Dummy extension data */
-};
-
 static int hostname_cb(SSL *s, int *al, void *arg)
 {
     const char *hostname = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
@@ -5821,63 +5807,6 @@ end:
     return testresult;
 }
 
-/*
- * Test loading of serverinfo data in various formats. test_sslmessages actually
- * tests to make sure the extensions appear in the handshake
- */
-static int test_serverinfo(int tst)
-{
-    unsigned int version;
-    unsigned char *sibuf;
-    size_t sibuflen;
-    int ret, expected, testresult = 0;
-    SSL_CTX *ctx;
-
-    ctx = SSL_CTX_new_ex(libctx, NULL, TLS_method());
-    if (!TEST_ptr(ctx))
-        goto end;
-
-    if ((tst & 0x01) == 0x01)
-        version = SSL_SERVERINFOV2;
-    else
-        version = SSL_SERVERINFOV1;
-
-    if ((tst & 0x02) == 0x02) {
-        sibuf = serverinfov2;
-        sibuflen = sizeof(serverinfov2);
-        expected = (version == SSL_SERVERINFOV2);
-    } else {
-        sibuf = serverinfov1;
-        sibuflen = sizeof(serverinfov1);
-        expected = (version == SSL_SERVERINFOV1);
-    }
-
-    if ((tst & 0x04) == 0x04) {
-        ret = SSL_CTX_use_serverinfo_ex(ctx, version, sibuf, sibuflen);
-    } else {
-        ret = SSL_CTX_use_serverinfo(ctx, sibuf, sibuflen);
-
-        /*
-         * The version variable is irrelevant in this case - it's what is in the
-         * buffer that matters
-         */
-        if ((tst & 0x02) == 0x02)
-            expected = 0;
-        else
-            expected = 1;
-    }
-
-    if (!TEST_true(ret == expected))
-        goto end;
-
-    testresult = 1;
-
- end:
-    SSL_CTX_free(ctx);
-
-    return testresult;
-}
-
 #if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
 
 #define  SYNTHV1CONTEXT     (SSL_EXT_TLS1_2_AND_BELOW_ONLY \
@@ -5885,15 +5814,20 @@ static int test_serverinfo(int tst)
                              | SSL_EXT_TLS1_2_SERVER_HELLO \
                              | SSL_EXT_IGNORE_ON_RESUMPTION)
 
+#define SERVERINFO_CUSTOM                                 \
+    0x00, (char)TLSEXT_TYPE_signed_certificate_timestamp, \
+    0x00, 0x03,                                           \
+    0x04, 0x05, 0x06                                      \
+
 static const unsigned char serverinfo_custom_v2[] = {
     0x00, 0x00, (SYNTHV1CONTEXT >> 8) & 0xff,  SYNTHV1CONTEXT & 0xff,
-    0x00, (char)TLSEXT_TYPE_signed_certificate_timestamp,
-    0x00, 0x03,
-    0x04, 0x05, 0x06
+    SERVERINFO_CUSTOM
+};
+static const unsigned char serverinfo_custom_v1[] = {
+    SERVERINFO_CUSTOM
 };
 static const size_t serverinfo_custom_v2_len = sizeof(serverinfo_custom_v2);
-static const unsigned char *serverinfo_custom_v1 = &serverinfo_custom_v2[4];
-static const size_t serverinfo_custom_v1_len = serverinfo_custom_v2_len - 4;
+static const size_t serverinfo_custom_v1_len = sizeof(serverinfo_custom_v1);
 
 static int serverinfo_custom_parse_cb(SSL *s, unsigned int ext_type,
                                           unsigned int context,
@@ -5914,11 +5848,11 @@ static int test_serverinfo_custom(const int idx)
     const int call_use_serverinfo_ex = idx > 0;
     const int use_v2_serverinfo = idx > 1;
 
-    const int version = use_v2_serverinfo ? SSL_SERVERINFOV2 : SSL_SERVERINFOV1;
+    int version = use_v2_serverinfo ? SSL_SERVERINFOV2 : SSL_SERVERINFOV1;
     const unsigned char *si = use_v2_serverinfo ? serverinfo_custom_v2
                                                 : serverinfo_custom_v1;
-    const size_t si_len = use_v2_serverinfo ? serverinfo_custom_v2_len
-                                            : serverinfo_custom_v1_len;
+    size_t si_len = use_v2_serverinfo ? serverinfo_custom_v2_len
+                                      : serverinfo_custom_v1_len;
 
     SSL_CTX *sctx = NULL, *cctx = NULL;
     SSL *clientssl = NULL, *serverssl = NULL;
@@ -10088,7 +10022,6 @@ int setup_tests(void)
 #else
     ADD_ALL_TESTS(test_custom_exts, 3);
 #endif
-    ADD_ALL_TESTS(test_serverinfo, 8);
     ADD_ALL_TESTS(test_export_key_mat, 6);
 #ifndef OSSL_NO_USABLE_TLS1_3
     ADD_ALL_TESTS(test_export_key_mat_early, 3);
