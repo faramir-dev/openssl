@@ -5878,7 +5878,6 @@ static int test_serverinfo(int tst)
     return testresult;
 }
 
-
 #if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
 
 #define  SYNTHV1CONTEXT     (SSL_EXT_TLS1_2_AND_BELOW_ONLY \
@@ -5939,10 +5938,7 @@ static int test_serverinfo_custom(const int idx)
     }
 
     if (!TEST_true(SSL_CTX_add_custom_ext(cctx, TLSEXT_TYPE_signed_certificate_timestamp,
-                                             SSL_EXT_TLS1_2_AND_BELOW_ONLY
-                                             | SSL_EXT_CLIENT_HELLO
-                                             | SSL_EXT_TLS1_2_SERVER_HELLO
-                                             | SSL_EXT_IGNORE_ON_RESUMPTION,
+                                             SYNTHV1CONTEXT,
                                              NULL, NULL, NULL,
                                              serverinfo_custom_parse_cb,
                                              &cb_result))

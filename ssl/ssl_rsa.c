@@ -707,15 +707,63 @@ static int serverinfo_process_buffer(unsigned int version,
     return 1;
 }
 
+static size_t extension_contextoff(unsigned int version)
+{
+    return version == SSL_SERVERINFOV1 ? 4 : 0;
+}
+
+static size_t extension_append_length(unsigned int version, size_t extension_length)
+{
+    return extension_length + extension_contextoff(version);
+}
+
+static void extension_append(unsigned int version,
+                             const unsigned char *extension,
+                             const size_t extension_length,
+                             unsigned char *serverinfo)
+{
+    const size_t contextoff = extension_contextoff(version);
+
+    if (contextoff > 0) {
+        /* We know this only uses the last 2 bytes */
+        serverinfo[0] = 0;
+        serverinfo[1] = 0;
+        serverinfo[2] = (SYNTHV1CONTEXT >> 8) & 0xff;
+        serverinfo[3] = SYNTHV1CONTEXT & 0xff;
+    }
+
+    memcpy(serverinfo + contextoff, extension, extension_length);
+}
+
 int SSL_CTX_use_serverinfo_ex(SSL_CTX *ctx, unsigned int version,
                               const unsigned char *serverinfo,
                               size_t serverinfo_length)
 {
-    unsigned char *new_serverinfo;
+    unsigned char *new_serverinfo = NULL;
 
     if (ctx == NULL || serverinfo == NULL || serverinfo_length == 0) {
         ERR_raise(ERR_LIB_SSL, ERR_R_PASSED_NULL_PARAMETER);
         return 0;
+    }
+    if (version == SSL_SERVERINFOV1) {
+        const size_t sinfo_length = extension_append_length(SSL_SERVERINFOV1,
+                                                            serverinfo_length);
+        unsigned char *sinfo;
+        int ret;
+
+        sinfo = OPENSSL_malloc(sinfo_length);
+        if (sinfo == NULL) {
+            ERR_raise(ERR_LIB_SSL, ERR_R_MALLOC_FAILURE);
+            return 0;
+        }
+
+        extension_append(SSL_SERVERINFOV1, serverinfo, serverinfo_length, sinfo);
+
+        ret = SSL_CTX_use_serverinfo_ex(ctx, SSL_SERVERINFOV2, sinfo,
+                                        sinfo_length);
+
+        OPENSSL_free(sinfo);
+        return ret;
     }
     if (!serverinfo_process_buffer(version, serverinfo, serverinfo_length,
                                    NULL)) {
@@ -748,55 +796,11 @@ int SSL_CTX_use_serverinfo_ex(SSL_CTX *ctx, unsigned int version,
     return 1;
 }
 
-static size_t extension_contextoff(unsigned int version)
-{
-    return version == SSL_SERVERINFOV1 ? 4 : 0;
-}
-
-static size_t extension_append_length(unsigned int version, size_t extension_length)
-{
-    return extension_length + extension_contextoff(version);
-}
-
-static void extension_append(unsigned int version,
-                             const unsigned char *extension,
-                             const size_t extension_length,
-                             unsigned char *serverinfo)
-{
-    const size_t contextoff = extension_contextoff(version);
-
-    if (contextoff > 0) {
-        /* We know this only uses the last 2 bytes */
-        serverinfo[0] = 0;
-        serverinfo[1] = 0;
-        serverinfo[2] = (SYNTHV1CONTEXT >> 8) & 0xff;
-        serverinfo[3] = SYNTHV1CONTEXT & 0xff;
-    }
-
-    memcpy(serverinfo + contextoff, extension, extension_length);
-}
-
 int SSL_CTX_use_serverinfo(SSL_CTX *ctx, const unsigned char *serverinfo,
                            size_t serverinfo_length)
 {
-    const size_t sinfo_length = extension_append_length(SSL_SERVERINFOV1,
-                                                        serverinfo_length);
-    unsigned char *sinfo;
-    int ret;
-
-    sinfo = OPENSSL_malloc(sinfo_length);
-    if (sinfo == NULL) {
-        ERR_raise(ERR_LIB_SSL, ERR_R_MALLOC_FAILURE);
-        return 0;
-    }
-
-    extension_append(SSL_SERVERINFOV1, serverinfo, serverinfo_length, sinfo);
-
-    ret = SSL_CTX_use_serverinfo_ex(ctx, SSL_SERVERINFOV2, sinfo,
-                                    sinfo_length);
-
-    OPENSSL_free(sinfo);
-    return ret;
+    return SSL_CTX_use_serverinfo_ex(ctx, SSL_SERVERINFOV1, serverinfo,
+                                     serverinfo_length);
 }
 
 int SSL_CTX_use_serverinfo_file(SSL_CTX *ctx, const char *file)
