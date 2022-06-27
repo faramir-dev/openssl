@@ -5914,6 +5914,12 @@ static int test_serverinfo_custom(const int idx)
     const int call_use_serverinfo_ex = idx > 0;
     const int use_v2_serverinfo = idx > 1;
 
+    const int version = use_v2_serverinfo ? SSL_SERVERINFOV2 : SSL_SERVERINFOV1;
+    const unsigned char *si = use_v2_serverinfo ? serverinfo_custom_v2
+                                                : serverinfo_custom_v1;
+    const size_t si_len = use_v2_serverinfo ? serverinfo_custom_v2_len
+                                            : serverinfo_custom_v1_len;
+
     SSL_CTX *sctx = NULL, *cctx = NULL;
     SSL *clientssl = NULL, *serverssl = NULL;
     int testresult = 0;
@@ -5924,11 +5930,6 @@ static int test_serverinfo_custom(const int idx)
                                        &sctx, &cctx, cert, privkey)))
         goto end;
 
-    const int version = use_v2_serverinfo ? SSL_SERVERINFOV2 : SSL_SERVERINFOV1;
-    const unsigned char *si = use_v2_serverinfo ? serverinfo_custom_v2
-                                                : serverinfo_custom_v1;
-    const size_t si_len = use_v2_serverinfo ? serverinfo_custom_v2_len
-                                            : serverinfo_custom_v1_len;
     if (call_use_serverinfo_ex) {
         if (!TEST_true(SSL_CTX_use_serverinfo_ex(sctx, version, si, si_len)))
             goto end;
