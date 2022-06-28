@@ -5830,11 +5830,11 @@ static const size_t serverinfo_custom_v2_len = sizeof(serverinfo_custom_v2);
 static const size_t serverinfo_custom_v1_len = sizeof(serverinfo_custom_v1);
 
 static int serverinfo_custom_parse_cb(SSL *s, unsigned int ext_type,
-                                          unsigned int context,
-                                          const unsigned char *in,
-                                          size_t inlen, X509 *x,
-                                          size_t chainidx, int *al,
-                                          void *parse_arg)
+                                      unsigned int context,
+                                      const unsigned char *in,
+                                      size_t inlen, X509 *x,
+                                      size_t chainidx, int *al,
+                                      void *parse_arg)
 {
     const size_t len = serverinfo_custom_v1_len;
     const unsigned char *si = &serverinfo_custom_v1[len - 3];
@@ -5873,10 +5873,10 @@ static int test_serverinfo_custom(const int idx)
     }
 
     if (!TEST_true(SSL_CTX_add_custom_ext(cctx, TLSEXT_TYPE_signed_certificate_timestamp,
-                                             SYNTHV1CONTEXT,
-                                             NULL, NULL, NULL,
-                                             serverinfo_custom_parse_cb,
-                                             &cb_result))
+                                          SYNTHV1CONTEXT,
+                                          NULL, NULL, NULL,
+                                          serverinfo_custom_parse_cb,
+                                          &cb_result))
         || !TEST_true(create_ssl_objects(sctx, cctx, &serverssl, &clientssl,
                                          NULL, NULL))
         || !TEST_true(create_ssl_connection(serverssl, clientssl,
