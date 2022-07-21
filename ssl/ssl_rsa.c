@@ -746,6 +746,10 @@ int SSL_CTX_use_serverinfo_ex(SSL_CTX *ctx, unsigned int version,
         return 0;
     }
     if (version == SSL_SERVERINFOV1) {
+        /*
+         * Convert serverinfo version v1 to v2 and call yourself recursively
+         * over the converted serverinfo.
+         */
         const size_t sinfo_length = extension_append_length(SSL_SERVERINFOV1,
                                                             serverinfo_length);
         unsigned char *sinfo;

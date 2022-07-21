@@ -5814,11 +5814,19 @@ end:
                              | SSL_EXT_TLS1_2_SERVER_HELLO \
                              | SSL_EXT_IGNORE_ON_RESUMPTION)
 
+#define TLS13CONTEXT (SSL_EXT_TLS1_3_CERTIFICATE \
+                      | SSL_EXT_TLS1_2_SERVER_HELLO \
+                      | SSL_EXT_CLIENT_HELLO)
+
 #define SERVERINFO_CUSTOM                                 \
     0x00, (char)TLSEXT_TYPE_signed_certificate_timestamp, \
     0x00, 0x03,                                           \
     0x04, 0x05, 0x06                                      \
 
+static const unsigned char serverinfo_custom_tls13[] = {
+    0x00, 0x00, (TLS13CONTEXT >> 8) & 0xff, TLS13CONTEXT & 0xff,
+    SERVERINFO_CUSTOM
+};
 static const unsigned char serverinfo_custom_v2[] = {
     0x00, 0x00, (SYNTHV1CONTEXT >> 8) & 0xff,  SYNTHV1CONTEXT & 0xff,
     SERVERINFO_CUSTOM
@@ -5826,6 +5834,7 @@ static const unsigned char serverinfo_custom_v2[] = {
 static const unsigned char serverinfo_custom_v1[] = {
     SERVERINFO_CUSTOM
 };
+static const size_t serverinfo_custom_tls13_len = sizeof(serverinfo_custom_tls13);
 static const size_t serverinfo_custom_v2_len = sizeof(serverinfo_custom_v2);
 static const size_t serverinfo_custom_v1_len = sizeof(serverinfo_custom_v1);
 
@@ -5845,27 +5854,63 @@ static int serverinfo_custom_parse_cb(SSL *s, unsigned int ext_type,
 
 static int test_serverinfo_custom(const int idx)
 {
-    const int call_use_serverinfo_ex = idx > 0;
-    const int use_v2_serverinfo = idx > 1;
-
-    int version = use_v2_serverinfo ? SSL_SERVERINFOV2 : SSL_SERVERINFOV1;
-    const unsigned char *si = use_v2_serverinfo ? serverinfo_custom_v2
-                                                : serverinfo_custom_v1;
-    size_t si_len = use_v2_serverinfo ? serverinfo_custom_v2_len
-                                      : serverinfo_custom_v1_len;
-
     SSL_CTX *sctx = NULL, *cctx = NULL;
     SSL *clientssl = NULL, *serverssl = NULL;
     int testresult = 0;
     int cb_result = 0;
 
-    if (!TEST_true(create_ssl_ctx_pair(libctx, TLSv1_2_server_method(),
-                                       TLS_client_method(), TLS1_2_VERSION, 0,
+    /*
+     * Following variables are set in the switch statement
+     *  according to the test iteration.
+     * Default values do not make much sense: test would fail with them.
+     */
+    int serverinfo_version = 0;
+    int protocol_version = 0;
+    unsigned int extension_context = 0;
+    const SSL_METHOD *server_method = NULL;
+    const unsigned char *si = NULL;
+    size_t si_len = 0;
+
+    const int call_use_serverinfo_ex = idx > 0;
+    switch (idx) {
+    case 0: /* FALLTHROUGH */
+    case 1:
+        serverinfo_version = SSL_SERVERINFOV1;
+        protocol_version = TLS1_2_VERSION;
+        extension_context = SYNTHV1CONTEXT;
+        server_method = TLSv1_2_server_method();
+        si = serverinfo_custom_v1;
+        si_len = serverinfo_custom_v1_len;
+        break;
+    case 2:
+        serverinfo_version = SSL_SERVERINFOV2;
+        protocol_version = TLS1_2_VERSION;
+        extension_context = SYNTHV1CONTEXT;
+        server_method = TLSv1_2_server_method();
+        si = serverinfo_custom_v2;
+        si_len = serverinfo_custom_v2_len;
+        break;
+    case 3:
+        serverinfo_version = SSL_SERVERINFOV2;
+        protocol_version = TLS1_3_VERSION;
+        extension_context = TLS13CONTEXT;
+        server_method = TLS_method();
+        si = serverinfo_custom_tls13;
+        si_len = serverinfo_custom_tls13_len;
+        break;
+    }
+
+    if (!TEST_true(create_ssl_ctx_pair(libctx,
+                                       server_method,
+                                       TLS_client_method(),
+                                       protocol_version,
+                                       0,
                                        &sctx, &cctx, cert, privkey)))
         goto end;
 
     if (call_use_serverinfo_ex) {
-        if (!TEST_true(SSL_CTX_use_serverinfo_ex(sctx, version, si, si_len)))
+        if (!TEST_true(SSL_CTX_use_serverinfo_ex(sctx, serverinfo_version,
+                                                 si, si_len)))
             goto end;
     } else {
         if (!TEST_true(SSL_CTX_use_serverinfo(sctx, si, si_len)))
@@ -5873,7 +5918,7 @@ static int test_serverinfo_custom(const int idx)
     }
 
     if (!TEST_true(SSL_CTX_add_custom_ext(cctx, TLSEXT_TYPE_signed_certificate_timestamp,
-                                          SYNTHV1CONTEXT,
+                                          extension_context,
                                           NULL, NULL, NULL,
                                           serverinfo_custom_parse_cb,
                                           &cb_result))
@@ -10074,7 +10119,7 @@ int setup_tests(void)
     ADD_ALL_TESTS(test_session_timeout, 1);
     ADD_TEST(test_load_dhfile);
 #if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
-    ADD_ALL_TESTS(test_serverinfo_custom, 3);
+    ADD_ALL_TESTS(test_serverinfo_custom, 4);
 #endif
     return 1;
 
