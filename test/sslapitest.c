@@ -5807,7 +5807,8 @@ end:
     return testresult;
 }
 
-#if !defined(OPENSSL_NO_TLS1_2) && !defined(OPENSSL_NO_DEPRECATED_3_0)
+#if !defined(OPENSSL_NO_TLS1_2) \
+    && !defined(OPENSSL_NO_DEPRECATED_3_0) && !defined(OSSL_NO_USABLE_TLS1_3)
 
 #define  SYNTHV1CONTEXT     (SSL_EXT_TLS1_2_AND_BELOW_ONLY \
                              | SSL_EXT_CLIENT_HELLO \
