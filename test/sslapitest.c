@@ -5807,8 +5807,7 @@ end:
     return testresult;
 }
 
-#if !defined(OPENSSL_NO_TLS1_2) \
-    && !defined(OPENSSL_NO_DEPRECATED_3_0) && !defined(OSSL_NO_USABLE_TLS1_3)
+#if !defined(OPENSSL_NO_TLS1_2) && !defined(OSSL_NO_USABLE_TLS1_3)
 
 #define  SYNTHV1CONTEXT     (SSL_EXT_TLS1_2_AND_BELOW_ONLY \
                              | SSL_EXT_CLIENT_HELLO \
@@ -10115,8 +10114,7 @@ int setup_tests(void)
     ADD_TEST(test_set_verify_cert_store_ssl);
     ADD_ALL_TESTS(test_session_timeout, 1);
     ADD_TEST(test_load_dhfile);
-#if !defined(OPENSSL_NO_TLS1_2) \
-    && !defined(OPENSSL_NO_DEPRECATED_3_0) && !defined(OSSL_NO_USABLE_TLS1_3)
+#if !defined(OPENSSL_NO_TLS1_2) && !defined(OSSL_NO_USABLE_TLS1_3)
     ADD_ALL_TESTS(test_serverinfo_custom, 4);
 #endif
     return 1;
