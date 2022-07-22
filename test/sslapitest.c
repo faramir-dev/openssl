@@ -5868,7 +5868,6 @@ static int test_serverinfo_custom(const int idx)
     int serverinfo_version = 0;
     int protocol_version = 0;
     unsigned int extension_context = 0;
-    const SSL_METHOD *server_method = NULL;
     const unsigned char *si = NULL;
     size_t si_len = 0;
 
@@ -5879,7 +5878,6 @@ static int test_serverinfo_custom(const int idx)
         serverinfo_version = SSL_SERVERINFOV1;
         protocol_version = TLS1_2_VERSION;
         extension_context = SYNTHV1CONTEXT;
-        server_method = TLSv1_2_server_method();
         si = serverinfo_custom_v1;
         si_len = serverinfo_custom_v1_len;
         break;
@@ -5887,7 +5885,6 @@ static int test_serverinfo_custom(const int idx)
         serverinfo_version = SSL_SERVERINFOV2;
         protocol_version = TLS1_2_VERSION;
         extension_context = SYNTHV1CONTEXT;
-        server_method = TLSv1_2_server_method();
         si = serverinfo_custom_v2;
         si_len = serverinfo_custom_v2_len;
         break;
@@ -5895,17 +5892,16 @@ static int test_serverinfo_custom(const int idx)
         serverinfo_version = SSL_SERVERINFOV2;
         protocol_version = TLS1_3_VERSION;
         extension_context = TLS13CONTEXT;
-        server_method = TLS_method();
         si = serverinfo_custom_tls13;
         si_len = serverinfo_custom_tls13_len;
         break;
     }
 
     if (!TEST_true(create_ssl_ctx_pair(libctx,
-                                       server_method,
-                                       TLS_client_method(),
+                                       TLS_method(),
+                                       TLS_method(),
                                        protocol_version,
-                                       0,
+                                       protocol_version,
                                        &sctx, &cctx, cert, privkey)))
         goto end;
 
