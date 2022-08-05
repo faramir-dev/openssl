@@ -1384,9 +1384,13 @@ int EVP_PKEY_set1_encoded_public_key(EVP_PKEY *pkey, const unsigned char *pub,
 
 size_t EVP_PKEY_get1_encoded_public_key(EVP_PKEY *pkey, unsigned char **ppub)
 {
-    int rv;
+    int rv = 0;
 
-    if (pkey != NULL && evp_pkey_is_provided(pkey)) {
+    if (pkey == NULL) {
+        return 0;
+    }
+
+    if (evp_pkey_is_provided(pkey)) {
         size_t return_size = OSSL_PARAM_UNMODIFIED;
         unsigned char *buf;
 
@@ -1415,11 +1419,8 @@ size_t EVP_PKEY_get1_encoded_public_key(EVP_PKEY *pkey, unsigned char **ppub)
         return return_size;
     }
 
-
     rv = evp_pkey_asn1_ctrl(pkey, ASN1_PKEY_CTRL_GET1_TLS_ENCPT, 0, ppub);
-    if (rv <= 0)
-        return 0;
-    return rv;
+    return rv <= 0 ? 0 : rv;
 }
 
 #endif /* FIPS_MODULE */

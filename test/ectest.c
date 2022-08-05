@@ -3007,6 +3007,187 @@ static int ec_d2i_publickey_test(void)
    return ret;
 }
 
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+#include <openssl/ssl.h>
+#include <openssl/rand.h>
+#include <openssl/kdf.h>
+#include <openssl/evp.h>
+#include <openssl/params.h>
+#include <openssl/param_build.h>
+#include <openssl/core_names.h>
+
+static int bufs2evp(
+        const char *keytype,
+        char *groupname,
+        unsigned char *privbuf, size_t privbuflen,
+        unsigned char *pubuf, size_t pubuflen,
+        EVP_PKEY **pkey)
+{
+    int erv=1;
+    EVP_PKEY_CTX *ctx=NULL;
+    BIGNUM *priv=NULL;
+    OSSL_PARAM_BLD *param_bld=NULL;;
+    OSSL_PARAM *params = NULL;
+
+    if (!keytype)
+        return 0;
+
+    //ctx = EVP_PKEY_CTX_new_from_name(NULL,keytype, NULL); // @daniel
+
+    param_bld = OSSL_PARAM_BLD_new();
+    if (!param_bld) {
+        erv=__LINE__; goto err;
+    }
+    if (groupname!=NULL && OSSL_PARAM_BLD_push_utf8_string(param_bld, "group", groupname,0)!=1) {
+        erv=__LINE__; goto err;
+    }
+    if (pubuf && pubuflen>0) {
+        if (OSSL_PARAM_BLD_push_octet_string(param_bld, "pub", pubuf, pubuflen)!=1) {
+            erv=__LINE__; goto err;
+        }
+    }
+    if (strlen(keytype)==2 && !strcmp(keytype,"EC")) {
+        priv = BN_bin2bn(privbuf, privbuflen, NULL);
+        if (!priv) {
+            erv=__LINE__; goto err;
+        }
+        if (OSSL_PARAM_BLD_push_BN(param_bld, "priv", priv)!=1) {
+            erv=__LINE__; goto err;
+        }
+    } else {
+        if (OSSL_PARAM_BLD_push_octet_string(param_bld, "priv", privbuf, privbuflen)!=1) {
+            erv=__LINE__; goto err;
+        }
+    }
+
+    params = OSSL_PARAM_BLD_to_param(param_bld);
+    if (!params) {
+        erv=__LINE__; goto err;
+    }
+
+    ctx = EVP_PKEY_CTX_new_from_name(NULL,keytype, NULL); // @daniel
+    //ctx = EVP_PKEY_CTX_new_from_name(NULL,"EC", NULL); // @daniel
+    if (ctx == NULL) {
+        erv=__LINE__; goto err;
+    }
+    if (EVP_PKEY_fromdata_init(ctx) <= 0) {
+        erv=__LINE__; goto err;
+    }
+    if (EVP_PKEY_fromdata(ctx, pkey, EVP_PKEY_KEYPAIR, params) <= 0) {
+        erv=__LINE__; goto err;
+    }
+
+err:
+    BN_free(priv);
+    EVP_PKEY_CTX_free(ctx);
+    OSSL_PARAM_BLD_free(param_bld);
+    OSSL_PARAM_free(params);
+    return erv;
+}
+
+/*!
+ * @brief  Map ascii to binary - utility macro used in >1 place
+ */
+#define HPKE_A2B(__c__) (__c__>='0'&&__c__<='9'?(__c__-'0'):\
+                        (__c__>='A'&&__c__<='F'?(__c__-'A'+10):\
+                        (__c__>='a'&&__c__<='f'?(__c__-'a'+10):0)))
+
+/*!
+ * @brief decode ascii hex to a binary buffer
+ *
+ * @param ahlen is the ascii hex string length
+ * @param ah is the ascii hex string
+ * @param blen is a pointer to the returned binary length
+ * @param buf is a pointer to the internally allocated binary buffer
+ * @return 1 for good otherwise bad
+ */
+static int ah_decode(size_t ahlen, const char *ah, size_t *blen, unsigned char **buf)
+{
+    size_t lblen=0;
+    unsigned char *lbuf=NULL;
+    if (ahlen <=0 || ah==NULL || blen==NULL || buf==NULL) {
+        return 0;
+    }
+    if (ahlen%1) {
+        return 0;
+    }
+    lblen=ahlen/2;
+    lbuf=OPENSSL_malloc(lblen);
+    if (lbuf==NULL) {
+        return 0;
+    }
+    int i=0;
+    for (i=0;i!=lblen;i++) {
+        lbuf[i]=HPKE_A2B(ah[2*i])*16+HPKE_A2B(ah[2*i+1]);
+    }
+    *blen=lblen;
+    *buf=lbuf;
+    return 1;
+}
+
+/*
+ * NIST p256 key pair from HPKE-07 test vectors
+ */
+static const char nprivstr[]="03e52d2261cb7ac9d69811cdd880eee627eb9c2066d0c24cfb33de82dbe27cf5";
+static const char npubstr[]="043da16e83494bb3fc8137ae917138fb7daebf8afba6ce7325478908c653690be70a9c9f676106cfb87a5c3edd1251c5fae33a12aa2c5eb7991498e345aa766004";
+
+/*
+ * X25519 key pair from HPKE-07 test vectors
+ */
+static const char xprivstr[]="6cee2e2755790708a2a1be22667883a5e3f9ec52810404a0d889a0ed3e28de00";
+static const char xpubstr[]="950897e0d37a8bdb0f2153edf5fa580a64b399c39fbb3d014f80983352a63617";
+
+static int test_key_encode()
+{
+    int testresult = 0;
+    int rv = 0;
+
+    //EVP_PKEY *retkey=NULL; // @daniel
+    EVP_PKEY *retkey=EVP_PKEY_new();  // @daniel
+    unsigned char *nprivbuf; size_t nprivlen=0;
+    unsigned char *npubbuf; size_t npublen=0;
+    unsigned char *xprivbuf; size_t xprivlen=0;
+    unsigned char *xpubbuf; size_t xpublen=0;
+    unsigned char *tmppubbuf; size_t tmppublen=0;
+
+    ah_decode(strlen(nprivstr),nprivstr,&nprivlen,&nprivbuf);
+    ah_decode(strlen(npubstr),npubstr,&npublen,&npubbuf);
+    ah_decode(strlen(xprivstr),xprivstr,&xprivlen,&xprivbuf);
+    ah_decode(strlen(xpubstr),xpubstr,&xpublen,&xpubbuf);
+
+    /*
+     * First do p-256 then x25519
+     */
+
+    rv=bufs2evp("EC","P-256",nprivbuf,nprivlen,npubbuf,npublen,&retkey);
+    if (rv==1) {
+        printf("P-256 with key pair worked\n");
+    } else {
+        printf("P-256 with key pair failed at %d\n",rv);
+        goto end;
+    }
+    tmppublen = EVP_PKEY_get1_encoded_public_key(retkey, &tmppubbuf);
+    if (tmppubbuf == NULL || tmppublen == 0) {
+        printf("NIST gep failed\n");
+    } else {
+        printf("NIST gep worked, re-calced pub:\n\t");
+        for (int i=0;i!=tmppublen;i++) {
+            printf("%02x",tmppubbuf[i]);
+        }
+        printf("\nhard coded pub:\n\t%s\n",npubstr);
+        OPENSSL_free(tmppubbuf);
+        tmppubbuf=NULL; tmppublen=0;
+    }
+    EVP_PKEY_free(retkey);retkey=NULL;
+    testresult = 1;
+
+end:
+    return testresult;
+}
+
 int setup_tests(void)
 {
     crv_len = EC_get_builtin_curves(NULL, 0);
@@ -3014,6 +3195,7 @@ int setup_tests(void)
         || !TEST_true(EC_get_builtin_curves(curves, crv_len)))
         return 0;
 
+if (0) {
     ADD_TEST(parameter_test);
     ADD_TEST(cofactor_range_test);
     ADD_ALL_TESTS(cardinality_test, crv_len);
@@ -3035,6 +3217,8 @@ int setup_tests(void)
     ADD_ALL_TESTS(custom_generator_test, crv_len);
     ADD_ALL_TESTS(custom_params_test, crv_len);
     ADD_TEST(ec_d2i_publickey_test);
+}
+    ADD_TEST(test_key_encode);
     return 1;
 }
 
