@@ -3161,7 +3161,6 @@ static int test_key_encode()
     /*
      * First do p-256 then x25519
      */
-
     rv=bufs2evp("EC","P-256",nprivbuf,nprivlen,npubbuf,npublen,&retkey);
     if (rv==1) {
         printf("P-256 with key pair worked\n");
@@ -3182,9 +3181,100 @@ static int test_key_encode()
         tmppubbuf=NULL; tmppublen=0;
     }
     EVP_PKEY_free(retkey);retkey=NULL;
+
+// ----------------------------------------------------------------------------
+    rv=bufs2evp("EC","P-256",nprivbuf,nprivlen,NULL,0,&retkey);
+    if (rv==1) {
+        printf("P-256 with just private key worked\n");
+    } else {
+        printf("P-256 with key pair failed at %d\n",rv);
+    }
+    npublen = EVP_PKEY_get1_encoded_public_key(retkey, &npubbuf);
+    if (npubbuf == NULL || npublen == 0) {
+        printf("NIST gep failed\n");
+    } else {
+        printf("NIST gep worked, re-calced pub:\n\t");
+        for (int i=0;i!=tmppublen;i++) {
+            printf("%02x",tmppubbuf[i]);
+        }
+        printf("\nhard coded pub:\n\t%s\n",npubstr);
+        OPENSSL_free(tmppubbuf);
+        tmppubbuf=NULL; tmppublen=0;
+    }
+    EVP_PKEY_free(retkey);retkey=NULL;
+
+#if 0
+    rv=bufs2evp("EC","P-256",nprivbuf,nprivlen,npubbuf,npublen,&retkey);
+    if (rv==1) {
+        printf("P-256 with key pair worked\n");
+    } else {
+        printf("P-256 with key pair failed at %d\n",rv);
+    }
+    tmppublen = EVP_PKEY_get1_encoded_public_key(retkey, &tmppubbuf);
+    if (tmppubbuf == NULL || tmppublen == 0) {
+        printf("NIST gep failed\n");
+    } else {
+        printf("NIST gep worked, re-calced pub:\n\t");
+        for (int i=0;i!=tmppublen;i++) {
+            printf("%02x",tmppubbuf[i]);
+        }
+        printf("\nhard coded pub:\n\t%s\n",npubstr);
+        OPENSSL_free(tmppubbuf);
+        tmppubbuf=NULL; tmppublen=0;
+    }
+    EVP_PKEY_free(retkey);retkey=NULL;
+
+    rv=bufs2evp("X25519",NULL,xprivbuf,xprivlen,xpubbuf,xpublen,&retkey);
+    if (rv==1) {
+        printf("X25519 with key pair worked\n");
+    } else {
+        printf("X25519 with key pair failed at %d\n",rv);
+    }
+    tmppublen = EVP_PKEY_get1_encoded_public_key(retkey, &tmppubbuf);
+    if (tmppubbuf == NULL || tmppublen == 0) {
+        printf("X25519 gep failed\n");
+    } else {
+        printf("X25519 gep worked, re-calced pub:\n\t");
+        for (int i=0;i!=tmppublen;i++) {
+            printf("%02x",tmppubbuf[i]);
+        }
+        printf("\nhard coded pub:\n\t%s\n",xpubstr);
+        OPENSSL_free(tmppubbuf);
+        tmppubbuf=NULL; tmppublen=0;
+    }
+    EVP_PKEY_free(retkey);retkey=NULL;
+
+    rv=bufs2evp("X25519",NULL,xprivbuf,xprivlen,NULL,0,&retkey);
+    if (rv==1) {
+        printf("X25519 with just private key worked\n");
+    } else {
+        printf("X25519 with just private key failed at %d\n",rv);
+    }
+    tmppublen = EVP_PKEY_get1_encoded_public_key(retkey, &tmppubbuf);
+    if (tmppubbuf == NULL || tmppublen == 0) {
+        printf("X25519 gep failed\n");
+    } else {
+        printf("X25519 gep worked, re-calced pub:\n\t");
+        for (int i=0;i!=tmppublen;i++) {
+            printf("%02x",tmppubbuf[i]);
+        }
+        printf("\nhard coded pub:\n\t%s\n",xpubstr);
+        OPENSSL_free(tmppubbuf);
+        tmppubbuf=NULL; tmppublen=0;
+    }
+    EVP_PKEY_free(retkey);retkey=NULL;
+
+    OPENSSL_free(npubbuf); OPENSSL_free(xpubbuf);
+    OPENSSL_free(nprivbuf); OPENSSL_free(xprivbuf);
+#endif
+// ----------------------------------------------------------------------------
+
     testresult = 1;
 
 end:
+    OPENSSL_free(npubbuf); OPENSSL_free(xpubbuf);
+    OPENSSL_free(nprivbuf); OPENSSL_free(xprivbuf);
+    OPENSSL_free(tmppubbuf); EVP_PKEY_free(retkey);
     return testresult;
 }
 
