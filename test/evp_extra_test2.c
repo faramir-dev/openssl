@@ -1064,6 +1064,26 @@ static int test_evp_md_ctx_copy(void)
     return ret;
 }
 
+static int test_xyz()
+{
+    int ret = 0;
+
+    if (!TEST_true(EVP_PBE_alg_add(NID_pbeWithMD5AndDES_CBC, EVP_des_cbc(), EVP_md5(),
+                    PKCS5_PBE_keyivgen)))
+        goto err;
+
+    int cipher_nid, md_nid;
+    EVP_PBE_KEYGEN_EX *keygen_ex;
+    EVP_PBE_KEYGEN *keygen;
+
+    if (!EVP_PBE_find_ex(EVP_PBE_TYPE_OUTER, OBJ_obj2nid(pbe_obj),
+                         &cipher_nid, &md_nid, &keygen, &keygen_ex)) {
+    ret = 1;
+
+    err:
+    return ret;
+}
+
 int setup_tests(void)
 {
     if (!test_get_libctx(&mainctx, &nullprov, NULL, NULL, NULL)) {
@@ -1101,6 +1121,7 @@ int setup_tests(void)
     ADD_TEST(test_evp_md_ctx_dup);
     ADD_TEST(test_evp_md_ctx_copy);
     ADD_ALL_TESTS(test_provider_unload_effective, 2);
+    ADD_TEST(test_xyz);
     return 1;
 }
 
