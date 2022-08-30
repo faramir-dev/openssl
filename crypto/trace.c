@@ -355,6 +355,7 @@ void ossl_trace_cleanup(void)
 int OSSL_trace_set_channel(int category, BIO *channel)
 {
 #ifndef OPENSSL_NO_TRACE
+// #error ItIsDefined // Daniel
     if (category >= 0 && category < OSSL_TRACE_CATEGORY_NUM)
         return set_trace_data(category, SIMPLE_CHANNEL, &channel, NULL, NULL,
                               trace_attach_cb, trace_detach_cb);
@@ -415,6 +416,7 @@ int OSSL_trace_set_callback(int category, OSSL_trace_cb callback, void *data)
     return 1;
 
  err:
+    ossl_trace_cleanup();
     BIO_free(channel);
     OPENSSL_free(trace_data);
 #endif

@@ -11,113 +11,108 @@
 
 #include "testutil.h"
 
-static const int NO_ENGINE =
-#ifndef OPENSSL_NO_ENGINE
-    0;
-#else
-    1;
-#endif
-
-
-
 static int test_trace_categories(void)
 {
-    for (int cat_num = -1; cat_num <= OSSL_TRACE_CATEGORY_NUM; ++cat_num) {
+    for (int cat_num = -1; cat_num <= OSSL_TRACE_CATEGORY_NUM + 1; ++cat_num) {
         const char *cat_name = OSSL_trace_get_category_name(cat_num);
+        int is_cat_name_eq = 0;
 
         switch (cat_num) {
-        case OSSL_TRACE_CATEGORY_ALL:
-            if(!TEST_str_eq(cat_name, "ALL"))
-                return 0;
+#define CASE(NAME) \
+        case OSSL_TRACE_CATEGORY_##NAME: \
+            is_cat_name_eq = TEST_str_eq(cat_name, #NAME); \
             break;
-        case OSSL_TRACE_CATEGORY_TRACE:
-            if(!TEST_str_eq(cat_name, "TRACE"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_INIT:
-            if(!TEST_str_eq(cat_name, "INIT"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_TLS:
-            if(!TEST_str_eq(cat_name, "TLS"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_TLS_CIPHER:
-            if(!TEST_str_eq(cat_name, "TLS_CIPHER"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_CONF:
-            if(!TEST_str_eq(cat_name, "CONF"))
-                return 0;
-            break;
-#ifndef OPENSSL_NO_ENGINE
-        case OSSL_TRACE_CATEGORY_ENGINE_TABLE:
-            if(!TEST_str_eq(cat_name, "ENGINE_TABLE"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_ENGINE_REF_COUNT:
-            if(!TEST_str_eq(cat_name, "ENGINE_REF_COUNT"))
-                return 0;
-            break;
-#endif
-        case OSSL_TRACE_CATEGORY_PKCS5V2:
-            if(!TEST_str_eq(cat_name, "PKCS5V2"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_PKCS12_KEYGEN:
-            if(!TEST_str_eq(cat_name, "PKCS12_KEYGEN"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_PKCS12_DECRYPT:
-            if(!TEST_str_eq(cat_name, "PKCS12_DECRYPT"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_X509V3_POLICY:
-            if(!TEST_str_eq(cat_name, "X509V3_POLICY"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_BN_CTX:
-            if(!TEST_str_eq(cat_name, "BN_CTX"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_CMP:
-            if(!TEST_str_eq(cat_name, "CMP"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_STORE:
-            if(!TEST_str_eq(cat_name, "STORE"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_DECODER:
-            if(!TEST_str_eq(cat_name, "DECODER"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_ENCODER:
-            if(!TEST_str_eq(cat_name, "ENCODER"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_REF_COUNT:
-            if(!TEST_str_eq(cat_name, "REF_COUNT"))
-                return 0;
-            break;
-        case OSSL_TRACE_CATEGORY_HTTP:
-            if(!TEST_str_eq(cat_name, "HTTP"))
-                return 0;
-            break;
+
+        CASE(ALL)
+        CASE(TRACE)
+        CASE(INIT)
+        CASE(TLS)
+        CASE(TLS_CIPHER)
+        CASE(CONF)
+        CASE(ENGINE_TABLE)
+        CASE(ENGINE_REF_COUNT)
+        CASE(PKCS5V2)
+        CASE(PKCS12_KEYGEN)
+        CASE(PKCS12_DECRYPT)
+        CASE(X509V3_POLICY)
+        CASE(BN_CTX)
+        CASE(CMP)
+        CASE(STORE)
+        CASE(DECODER)
+        CASE(ENCODER)
+        CASE(REF_COUNT)
+        CASE(HTTP)
+#undef CASE
         default:
-            if (!TEST_ptr_null(cat_name))
-                return 0;
+            is_cat_name_eq = TEST_ptr_null(cat_name);
             break;
         }
 
+        if (!TEST_true(is_cat_name_eq))
+            return 0;
         const int ret_cat_num =
             OSSL_trace_get_category_num(cat_name);
         const int expected_ret = cat_name != NULL ? cat_num : -1;
         if (!TEST_int_eq(expected_ret, ret_cat_num))
             return 0;
+
     }
+
     return 1;
 }
+
+#ifndef OPENSSL_NO_TRACE
+static void put_trace_output()
+{
+    OSSL_TRACE_BEGIN(TLS) {
+        BIO_printf(trc_out, "Hello World\n");
+        BIO_printf(trc_out, "Good Bye Universe\n");
+    } OSSL_TRACE_END(TLS);
+}
+
+static int test_trace_channel()
+{
+    int ret = 0;
+    BIO *bio = NULL;
+    char *p_buf = NULL;
+    long len = 0;
+    static const char expected[] = "xyz-\nHello World\nGood Bye Universe\n-abc\n";
+    static const char expected_len = sizeof(expected) - 1;
+
+    bio = BIO_new(BIO_s_mem());
+    //bio = BIO_new_file("/tmp/fixme-name-000.log", "w");
+    if (!TEST_ptr(bio))
+        goto end;
+
+    if (!TEST_int_eq(OSSL_trace_set_channel(OSSL_TRACE_CATEGORY_TLS, bio), 1))
+        goto end;
+
+    if (!TEST_true(OSSL_trace_enabled(OSSL_TRACE_CATEGORY_TLS)))
+        goto end;
+
+    if (!TEST_int_eq(OSSL_trace_set_prefix(OSSL_TRACE_CATEGORY_TLS, "xyz-"), 1))
+        goto end;
+    if (!TEST_int_eq(OSSL_trace_set_suffix(OSSL_TRACE_CATEGORY_TLS, "-abc"), 1))
+        goto end;
+
+    put_trace_output(OSSL_TRACE_CATEGORY_TLS);
+    //ossl_trace_cleanup();
+    len = BIO_get_mem_data(bio, &p_buf);
+    fprintf(stderr, "-> %.*s;\n", (int)len, p_buf);
+    if (!TEST_strn2_eq(p_buf, len, expected, expected_len))
+        goto end;
+//int OSSL_trace_set_callback(int category, OSSL_trace_cb callback, void *data);
+    if (!TEST_int_eq(OSSL_trace_set_channel(OSSL_TRACE_CATEGORY_TLS, NULL), 1))
+        goto end;
+    bio = NULL;
+
+    ret = 1;
+
+end:
+    BIO_free(bio);
+    return ret;
+}
+#endif
 
 OPT_TEST_DECLARE_USAGE("\n")
 
@@ -128,14 +123,10 @@ int setup_tests(void)
         return 0;
     }
 
-/*
-    if (!TEST_ptr(certin = test_get_argument(0))
-            || !TEST_ptr(privkeyin = test_get_argument(1))
-            || !TEST_ptr(derin = test_get_argument(2)))
-        return 0;
-*/
-
     ADD_TEST(test_trace_categories);
+#ifndef OPENSSL_NO_TRACE
+    ADD_TEST(test_trace_channel);
+#endif
     return 1;
 }
 
