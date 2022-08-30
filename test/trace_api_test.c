@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2022 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2022 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -80,7 +80,6 @@ static int test_trace_channel()
     static const char expected_len = sizeof(expected) - 1;
 
     bio = BIO_new(BIO_s_mem());
-    //bio = BIO_new_file("/tmp/fixme-name-000.log", "w");
     if (!TEST_ptr(bio))
         goto end;
 
@@ -96,12 +95,9 @@ static int test_trace_channel()
         goto end;
 
     put_trace_output(OSSL_TRACE_CATEGORY_TLS);
-    //ossl_trace_cleanup();
     len = BIO_get_mem_data(bio, &p_buf);
-    fprintf(stderr, "-> %.*s;\n", (int)len, p_buf);
     if (!TEST_strn2_eq(p_buf, len, expected, expected_len))
         goto end;
-//int OSSL_trace_set_callback(int category, OSSL_trace_cb callback, void *data);
     if (!TEST_int_eq(OSSL_trace_set_channel(OSSL_TRACE_CATEGORY_TLS, NULL), 1))
         goto end;
     bio = NULL;
