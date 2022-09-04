@@ -1064,7 +1064,7 @@ static int test_evp_md_ctx_copy(void)
     return ret;
 }
 
-static int test_xyz()
+static int test_evp_pbe_alg_add()
 {
     int ret = 0;
     int cipher_nid = 0, md_nid = 0;
@@ -1129,7 +1129,7 @@ int setup_tests(void)
     ADD_TEST(test_evp_md_ctx_dup);
     ADD_TEST(test_evp_md_ctx_copy);
     ADD_ALL_TESTS(test_provider_unload_effective, 2);
-    ADD_TEST(test_xyz);
+    ADD_TEST(test_evp_pbe_alg_add);
     return 1;
 }
 
