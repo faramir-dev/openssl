@@ -17,7 +17,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/decoder.h>
-#include "EVP_Signature_demo.h"
+#include <openssl/dsa.h>
 
 /*
  * This demonstration will calculate and verify a signature of data using
@@ -37,36 +37,33 @@ static const char *hamlet_2 =
     "That flesh is heir to? tis a consumation\n"
 ;
 
-/*
- * For demo_sign, load EC private key priv_key from priv_key_der[].
- * For demo_verify, load EC public key pub_key from pub_key_der[].
- */
-static EVP_PKEY *get_key(OSSL_LIB_CTX *libctx, const char *propq, int public)
+static int generate_dsa_key(DSA **p_dsa)
 {
-    OSSL_DECODER_CTX *dctx = NULL;
-    EVP_PKEY  *pkey = NULL;
-    int selection;
-    const unsigned char *data;
-    size_t data_len;
+    int result = 0;
+    
+    DSA *dsa = NULL;
 
-    if (public) {
-        selection = EVP_PKEY_PUBLIC_KEY;
-        data =  pub_key_der;
-        data_len = sizeof(pub_key_der);
-    } else {
-        selection =  EVP_PKEY_KEYPAIR;
-        data = priv_key_der;
-        data_len = sizeof(priv_key_der);
+    dsa = DSA_new();
+
+    if (!DSA_generate_parameters_ex(dsa, 1024, NULL, 0, NULL, NULL, NULL))
+        goto end;
+
+    if (!DSA_generate_key(dsa))
+        goto end;
+
+    result = 1;
+end:
+    if(!result) {
+        DSA_free(dsa);
+        dsa = NULL;
     }
-    dctx = OSSL_DECODER_CTX_new_for_pkey(&pkey, "DER", NULL, "EC",
-                                         selection, libctx, propq);
-    (void)OSSL_DECODER_from_data(dctx, &data, &data_len);
-    OSSL_DECODER_CTX_free(dctx);
-    if (pkey == NULL)
-        fprintf(stderr, "Failed to load %s key.\n", public ? "public" : "private");
-    return pkey;
+    
+    p_dsa = dsa;
+
+    return result;
 }
 
+#if 0
 static int demo_sign(OSSL_LIB_CTX *libctx,  const char *sig_name,
                      size_t *sig_out_len, unsigned char **sig_out_value)
 {
@@ -201,9 +198,25 @@ cleanup:
     EVP_MD_CTX_free(verify_context);
     return result;
 }
+#endif
 
 int main(void)
 {
+    int result = 0;
+    DSA *dsa = NULL;
+
+    if (!generate_dsa_key(&dsa))
+        goto end;
+
+    result = 1;
+end:
+    if (!result)
+        ERR_print_errors_fp(stderr);
+
+    DSA_free(dsa);
+
+    return result ? 0 : 1;
+#if 0
     OSSL_LIB_CTX *libctx = NULL;
     //const char *sig_name = "SHA3-512";
     const char *sig_name = "DSA";
@@ -233,4 +246,5 @@ cleanup:
     OSSL_LIB_CTX_free(libctx);
     OPENSSL_free(sig_value);
     return result == 0;
+#endif
 }
