@@ -37,175 +37,191 @@ static const char *hamlet_2 =
     "That flesh is heir to? tis a consumation\n"
 ;
 
-static int generate_dsa_key(DSA **p_dsa)
+static const char ALG[] = "DSA";
+static const char DIGEST[] = "SHA256";
+static const int NUMBITS = 1024;
+static const char * const PROPQUERY = NULL;
+
+static int generate_dsa_key(OSSL_LIB_CTX *libctx,
+                            EVP_PKEY **p_private_key,
+                            EVP_PKEY **p_public_key)
 {
     int result = 0;
-    
-    DSA *dsa = NULL;
 
-    dsa = DSA_new();
+    EVP_PKEY *params = NULL, *pkey = NULL;
+    EVP_PKEY_CTX *ctx = NULL;
 
-    if (!DSA_generate_parameters_ex(dsa, 1024, NULL, 0, NULL, NULL, NULL))
+    /* Generate Public Key */
+    ctx = EVP_PKEY_CTX_new_from_name(libctx, ALG, PROPQUERY);
+    if (ctx == NULL)
         goto end;
 
-    if (!DSA_generate_key(dsa))
+    //EVP_PKEY_CTX_set_app_data(ctx, bio_err);
+    if (EVP_PKEY_paramgen_init(ctx) <= 0)
+        goto end;
+
+    if (EVP_PKEY_CTX_set_dsa_paramgen_bits(ctx, NUMBITS) <= 0)
+        goto end;
+    if (EVP_PKEY_paramgen(ctx, &params) <= 0)
+        goto end;
+    if (params == NULL)
+        goto end;
+
+    /* Generate Private Key */
+    EVP_PKEY_CTX_free(ctx);
+    ctx = EVP_PKEY_CTX_new_from_pkey(libctx, params,
+                                     NULL);
+    if (ctx == NULL)
+        goto end;
+    if (EVP_PKEY_keygen_init(ctx) <= 0)
+        goto end;
+
+    if (EVP_PKEY_keygen(ctx, &pkey) <= 0)
+        goto end;
+    if (pkey == NULL)
         goto end;
 
     result = 1;
 end:
     if(!result) {
-        DSA_free(dsa);
-        dsa = NULL;
+        EVP_PKEY_free(params);
+        params = NULL;
+        EVP_PKEY_free(pkey);
+        pkey = NULL;
     }
-    
-    p_dsa = dsa;
+    EVP_PKEY_CTX_free(ctx);
+    *p_public_key = params;
+    *p_private_key = pkey;
+    fprintf(stdout, "Generating keys:\n");
+    fprintf(stdout, "  Params:\n");
+    EVP_PKEY_print_public_fp(stdout, params, 4, NULL);
+    EVP_PKEY_print_private_fp(stdout, params, 4, NULL);
+    EVP_PKEY_print_params_fp(stdout, params, 4, NULL);
+    fprintf(stdout, "  PKEY:\n");
+    EVP_PKEY_print_public_fp(stdout, pkey, 4, NULL);
+    EVP_PKEY_print_private_fp(stdout, pkey, 4, NULL);
+    EVP_PKEY_print_params_fp(stdout, pkey, 4, NULL);
 
     return result;
 }
 
-#if 0
-static int demo_sign(OSSL_LIB_CTX *libctx,  const char *sig_name,
-                     size_t *sig_out_len, unsigned char **sig_out_value)
+static int demo_sign(OSSL_LIB_CTX *libctx,
+                     size_t *p_sig_len, unsigned char **p_sig_value,
+                     EVP_PKEY *pkey)
 {
-    int result = 0, public = 0;
-    size_t sig_len;
+    int result = 0;
+    size_t sig_len = 0;
     unsigned char *sig_value = NULL;
-    const char *propq = NULL;
-    EVP_MD_CTX *sign_context = NULL;
-    EVP_PKEY *priv_key = NULL;
+    EVP_MD_CTX *ctx = NULL;
+    const EVP_MD *md = NULL;
 
-    /* Get private key */
-    priv_key = get_key(libctx, propq, public);
-    if (priv_key == NULL) {
-        fprintf(stderr, "Get private key failed.\n");
-        goto cleanup;
-    }
-    /*
-     * Make a message signature context to hold temporary state
-     * during signature creation
-     */
-    sign_context = EVP_MD_CTX_new();
-    if (sign_context == NULL) {
-        fprintf(stderr, "EVP_MD_CTX_new failed.\n");
-        goto cleanup;
-    }
-    /*
-     * Initialize the sign context to use the fetched
-     * sign provider.
-     */
-    if (!EVP_DigestSignInit_ex(sign_context, NULL, sig_name,
-                              libctx, NULL, priv_key, NULL)) {
-        fprintf(stderr, "EVP_DigestSignInit_ex failed.\n");
-        goto cleanup;
-    }
-    /*
-     * EVP_DigestSignUpdate() can be called several times on the same context
-     * to include additional data.
-     */
-    if (!EVP_DigestSignUpdate(sign_context, hamlet_1, strlen(hamlet_1))) {
-        fprintf(stderr, "EVP_DigestSignUpdate(hamlet_1) failed.\n");
-        goto cleanup;
-    }
-    if (!EVP_DigestSignUpdate(sign_context, hamlet_2, strlen(hamlet_2))) {
-        fprintf(stderr, "EVP_DigestSignUpdate(hamlet_2) failed.\n");
-        goto cleanup;
-    }
-    /* Call EVP_DigestSignFinal to get signature length sig_len */
-    if (!EVP_DigestSignFinal(sign_context, NULL, &sig_len)) {
-        fprintf(stderr, "EVP_DigestSignFinal failed.\n");
-        goto cleanup;
-    }
-    if (sig_len <= 0) {
-        fprintf(stderr, "EVP_DigestSignFinal returned invalid signature length.\n");
-        goto cleanup;
-    }
+    ctx = EVP_MD_CTX_create();
+    if (ctx == NULL)
+        goto end;
+
+    md = EVP_get_digestbyname(DIGEST);
+    if (md == NULL)
+        goto end;
+
+    if (EVP_DigestInit_ex(ctx, md, NULL) != 1)
+        goto end;
+
+    if (EVP_DigestSignInit(ctx, NULL, md, NULL, pkey) != 1)
+        goto end;
+
+   if (EVP_DigestSignUpdate(ctx, hamlet_1, sizeof(hamlet_1)) != 1)
+        goto end;
+
+   if (EVP_DigestSignUpdate(ctx, hamlet_2, sizeof(hamlet_2)) != 1)
+        goto end;
+
+    if (EVP_DigestSignFinal(ctx, NULL, &sig_len) != 1)
+        goto end;
+    if (sig_len <= 0)
+        goto end;
+
     sig_value = OPENSSL_malloc(sig_len);
-    if (sig_value == NULL) {
-        fprintf(stderr, "No memory.\n");
-        goto cleanup;
+    if (sig_value == NULL)
+        goto end;
+
+    if (EVP_DigestSignFinal(ctx, sig_value, &sig_len) != 1)
+        goto end;
+
+    result = 1;
+end:
+    EVP_MD_CTX_destroy(ctx);
+    if (!result) {
+        OPENSSL_free(sig_value);
+        sig_len = 0;
+        sig_value = NULL;
     }
-    if (!EVP_DigestSignFinal(sign_context, sig_value, &sig_len)) {
-        fprintf(stderr, "EVP_DigestSignFinal failed.\n");
-        goto cleanup;
-    }
-    *sig_out_len = sig_len;
-    *sig_out_value = sig_value;
+    *p_sig_len = sig_len;
+    *p_sig_value = sig_value;
     fprintf(stdout, "Generating signature:\n");
     BIO_dump_indent_fp(stdout, sig_value, sig_len, 2);
     fprintf(stdout, "\n");
-    result = 1;
-
-cleanup:
-    /* OpenSSL free functions will ignore NULL arguments */
-    if (!result)
-        OPENSSL_free(sig_value);
-    EVP_PKEY_free(priv_key);
-    EVP_MD_CTX_free(sign_context);
     return result;
 }
 
-static int demo_verify(OSSL_LIB_CTX *libctx, const char *sig_name,
-                       size_t sig_len, unsigned char *sig_value)
+static int demo_verify(OSSL_LIB_CTX *libctx,
+                       size_t sig_len, unsigned char *sig_value,
+                       EVP_PKEY *pkey)
 {
-    int result = 0, public = 1;
-    const char *propq = NULL;
-    EVP_MD_CTX *verify_context = NULL;
-    EVP_PKEY *pub_key = NULL;
+    int result = 0;
 
-    /*
-     * Make a verify signature context to hold temporary state
-     * during signature verification
-     */
-    verify_context = EVP_MD_CTX_new();
-    if (verify_context == NULL) {
-        fprintf(stderr, "EVP_MD_CTX_new failed.\n");
-        goto cleanup;
-    }
-    /* Get public key */
-    pub_key = get_key(libctx, propq, public);
-    if (pub_key == NULL) {
-        fprintf(stderr, "Get public key failed.\n");
-        goto cleanup;
-    }
-    /* Verify */
-    if (!EVP_DigestVerifyInit_ex(verify_context, NULL, sig_name,
-                                libctx, NULL, pub_key, NULL)) {
-        fprintf(stderr, "EVP_DigestVerifyInit failed.\n");
-        goto cleanup;
-    }
-    /*
-     * EVP_DigestVerifyUpdate() can be called several times on the same context
-     * to include additional data.
-     */
-    if (!EVP_DigestVerifyUpdate(verify_context, hamlet_1, strlen(hamlet_1))) {
-        fprintf(stderr, "EVP_DigestVerifyUpdate(hamlet_1) failed.\n");
-        goto cleanup;
-    }
-    if (!EVP_DigestVerifyUpdate(verify_context, hamlet_2, strlen(hamlet_2))) {
-        fprintf(stderr, "EVP_DigestVerifyUpdate(hamlet_2) failed.\n");
-        goto cleanup;
-    }
-    if (EVP_DigestVerifyFinal(verify_context, sig_value, sig_len) <= 0) {
-        fprintf(stderr, "EVP_DigestVerifyFinal failed.\n");
-        goto cleanup;
-    }
-    fprintf(stdout, "Signature verified.\n");
+    EVP_MD_CTX *ctx = NULL;
+    const EVP_MD *md = NULL;
+
+    ctx = EVP_MD_CTX_create();
+    if(ctx == NULL)
+        goto end;
+
+    md = EVP_get_digestbyname(DIGEST);
+    if(md == NULL)
+        goto end;
+
+    if (EVP_DigestInit_ex(ctx, md, NULL) != 1)
+        goto end;
+
+    if (EVP_DigestVerifyInit(ctx, NULL, md, NULL, pkey) != 1)
+        goto end;
+
+    if (EVP_DigestVerifyUpdate(ctx, hamlet_1, sizeof(hamlet_1)) != 1)
+        goto end;
+
+    if (EVP_DigestVerifyUpdate(ctx, hamlet_2, sizeof(hamlet_2)) != 1)
+        goto end;
+
+    /* Clear any errors for the call below */
+    ERR_clear_error();
+
+    if (EVP_DigestVerifyFinal(ctx, sig_value, sig_len) != 1)
+        goto end;
+
     result = 1;
-
-cleanup:
-    /* OpenSSL free functions will ignore NULL arguments */
-    EVP_PKEY_free(pub_key);
-    EVP_MD_CTX_free(verify_context);
+end:
+    EVP_MD_CTX_destroy(ctx);
     return result;
 }
-#endif
 
 int main(void)
 {
     int result = 0;
-    DSA *dsa = NULL;
+    OSSL_LIB_CTX *libctx = NULL;
+    EVP_PKEY *pub_key = NULL;
+    EVP_PKEY *priv_key = NULL;
+    size_t sig_len = 0;
+    unsigned char *sig_value = NULL;
 
-    if (!generate_dsa_key(&dsa))
+    libctx = OSSL_LIB_CTX_new();
+
+    if (!generate_dsa_key(libctx, &priv_key, &pub_key))
+        goto end;
+
+    if (!demo_sign(libctx, &sig_len, &sig_value, priv_key))
+        goto end;
+
+    if (!demo_verify(libctx, sig_len, sig_value, priv_key))
         goto end;
 
     result = 1;
@@ -213,7 +229,10 @@ end:
     if (!result)
         ERR_print_errors_fp(stderr);
 
-    DSA_free(dsa);
+    OPENSSL_free(sig_value);
+    EVP_PKEY_free(pub_key);
+    EVP_PKEY_free(priv_key);
+    OSSL_LIB_CTX_free(libctx);
 
     return result ? 0 : 1;
 #if 0
