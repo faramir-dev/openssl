@@ -42,21 +42,18 @@ static const char DIGEST[] = "SHA256";
 static const int NUMBITS = 1024;
 static const char * const PROPQUERY = NULL;
 
-static int generate_dsa_key(OSSL_LIB_CTX *libctx,
-                            EVP_PKEY **p_private_key,
-                            EVP_PKEY **p_public_key)
+static int generate_dsa_params(OSSL_LIB_CTX *libctx,
+                               EVP_PKEY **p_params_key)
 {
     int result = 0;
 
-    EVP_PKEY *params = NULL, *pkey = NULL;
     EVP_PKEY_CTX *ctx = NULL;
+    EVP_PKEY *params = NULL;
 
-    /* Generate Public Key */
     ctx = EVP_PKEY_CTX_new_from_name(libctx, ALG, PROPQUERY);
     if (ctx == NULL)
         goto end;
 
-    //EVP_PKEY_CTX_set_app_data(ctx, bio_err);
     if (EVP_PKEY_paramgen_init(ctx) <= 0)
         goto end;
 
@@ -67,8 +64,32 @@ static int generate_dsa_key(OSSL_LIB_CTX *libctx,
     if (params == NULL)
         goto end;
 
-    /* Generate Private Key */
+    result = 1;
+end:
+    if(!result) {
+        EVP_PKEY_free(params);
+        params = NULL;
+    }
     EVP_PKEY_CTX_free(ctx);
+    *p_params_key = params;
+    fprintf(stdout, "Params:\n");
+    EVP_PKEY_print_public_fp(stdout, params, 4, NULL);
+    EVP_PKEY_print_private_fp(stdout, params, 4, NULL);
+    EVP_PKEY_print_params_fp(stdout, params, 4, NULL);
+    fprintf(stdout, "\n");
+
+    return result;
+}
+
+static int generate_dsa_key(OSSL_LIB_CTX *libctx,
+                            EVP_PKEY *params,
+                            EVP_PKEY **p_pkey)
+{
+    int result = 0;
+
+    EVP_PKEY_CTX *ctx = NULL;
+    EVP_PKEY *pkey = NULL;
+
     ctx = EVP_PKEY_CTX_new_from_pkey(libctx, params,
                                      NULL);
     if (ctx == NULL)
@@ -84,23 +105,16 @@ static int generate_dsa_key(OSSL_LIB_CTX *libctx,
     result = 1;
 end:
     if(!result) {
-        EVP_PKEY_free(params);
-        params = NULL;
         EVP_PKEY_free(pkey);
         pkey = NULL;
     }
     EVP_PKEY_CTX_free(ctx);
-    *p_public_key = params;
-    *p_private_key = pkey;
-    fprintf(stdout, "Generating keys:\n");
-    fprintf(stdout, "  Params:\n");
-    EVP_PKEY_print_public_fp(stdout, params, 4, NULL);
-    EVP_PKEY_print_private_fp(stdout, params, 4, NULL);
-    EVP_PKEY_print_params_fp(stdout, params, 4, NULL);
-    fprintf(stdout, "  PKEY:\n");
+    *p_pkey = pkey;
+    fprintf(stdout, "Generating public/private key pair:\n");
     EVP_PKEY_print_public_fp(stdout, pkey, 4, NULL);
     EVP_PKEY_print_private_fp(stdout, pkey, 4, NULL);
     EVP_PKEY_print_params_fp(stdout, pkey, 4, NULL);
+    fprintf(stdout, "\n");
 
     return result;
 }
@@ -208,20 +222,23 @@ int main(void)
 {
     int result = 0;
     OSSL_LIB_CTX *libctx = NULL;
-    EVP_PKEY *pub_key = NULL;
-    EVP_PKEY *priv_key = NULL;
+    EVP_PKEY *params = NULL;
+    EVP_PKEY *pkey = NULL;
     size_t sig_len = 0;
     unsigned char *sig_value = NULL;
 
     libctx = OSSL_LIB_CTX_new();
 
-    if (!generate_dsa_key(libctx, &priv_key, &pub_key))
+    if (!generate_dsa_params(libctx, &params))
         goto end;
 
-    if (!demo_sign(libctx, &sig_len, &sig_value, priv_key))
+    if (!generate_dsa_key(libctx, params, &pkey))
         goto end;
 
-    if (!demo_verify(libctx, sig_len, sig_value, priv_key))
+    if (!demo_sign(libctx, &sig_len, &sig_value, pkey))
+        goto end;
+
+    if (!demo_verify(libctx, sig_len, sig_value, pkey))
         goto end;
 
     result = 1;
@@ -230,40 +247,9 @@ end:
         ERR_print_errors_fp(stderr);
 
     OPENSSL_free(sig_value);
-    EVP_PKEY_free(pub_key);
-    EVP_PKEY_free(priv_key);
+    EVP_PKEY_free(params);
+    EVP_PKEY_free(pkey);
     OSSL_LIB_CTX_free(libctx);
 
     return result ? 0 : 1;
-#if 0
-    OSSL_LIB_CTX *libctx = NULL;
-    //const char *sig_name = "SHA3-512";
-    const char *sig_name = "DSA";
-    size_t sig_len = 0;
-    unsigned char *sig_value = NULL;
-    int result = 0;
-
-    libctx = OSSL_LIB_CTX_new();
-    if (libctx == NULL) {
-        fprintf(stderr, "OSSL_LIB_CTX_new() returned NULL\n");
-        goto cleanup;
-    }
-    if (!demo_sign(libctx, sig_name, &sig_len, &sig_value)) {
-        fprintf(stderr, "demo_sign failed.\n");
-        goto cleanup;
-    }
-    if (!demo_verify(libctx, sig_name, sig_len, sig_value)) {
-        fprintf(stderr, "demo_verify failed.\n");
-        goto cleanup;
-    }
-    result = 1;
-
-cleanup:
-    if (result != 1)
-        ERR_print_errors_fp(stderr);
-    /* OpenSSL free functions will ignore NULL arguments */
-    OSSL_LIB_CTX_free(libctx);
-    OPENSSL_free(sig_value);
-    return result == 0;
-#endif
 }
