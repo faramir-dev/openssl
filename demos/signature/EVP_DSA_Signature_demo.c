@@ -73,8 +73,6 @@ end:
     EVP_PKEY_CTX_free(ctx);
     *p_params_key = params;
     fprintf(stdout, "Params:\n");
-    EVP_PKEY_print_public_fp(stdout, params, 4, NULL);
-    EVP_PKEY_print_private_fp(stdout, params, 4, NULL);
     EVP_PKEY_print_params_fp(stdout, params, 4, NULL);
     fprintf(stdout, "\n");
 
@@ -112,7 +110,9 @@ end:
     *p_pkey = pkey;
     fprintf(stdout, "Generating public/private key pair:\n");
     EVP_PKEY_print_public_fp(stdout, pkey, 4, NULL);
+    fprintf(stdout, "\n");
     EVP_PKEY_print_private_fp(stdout, pkey, 4, NULL);
+    fprintf(stdout, "\n");
     EVP_PKEY_print_params_fp(stdout, pkey, 4, NULL);
     fprintf(stdout, "\n");
 
