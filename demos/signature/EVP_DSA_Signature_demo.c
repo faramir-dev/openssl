@@ -9,7 +9,7 @@
 
 /*
  * An example that uses the EVP_MD*, EVP_DigestSign* and EVP_DigestVerify*
- * methods to calculate and verify a signature of two static buffers.
+ * methods to calculate and verify a DSA signature of two static buffers.
  */
 
 #include <string.h>
@@ -43,7 +43,7 @@ static const int NUMBITS = 1024;
 static const char * const PROPQUERY = NULL;
 
 static int generate_dsa_params(OSSL_LIB_CTX *libctx,
-                               EVP_PKEY **p_params_key)
+                               EVP_PKEY **p_params)
 {
     int result = 0;
 
@@ -71,7 +71,7 @@ end:
         params = NULL;
     }
     EVP_PKEY_CTX_free(ctx);
-    *p_params_key = params;
+    *p_params = params;
     fprintf(stdout, "Params:\n");
     EVP_PKEY_print_params_fp(stdout, params, 4, NULL);
     fprintf(stdout, "\n");
